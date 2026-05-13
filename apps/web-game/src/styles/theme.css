@@ -1,0 +1,65 @@
+/* Tema Değişkenleri */
+
+:root {
+  /* Açık Tema (Light Mode) */
+  --bg-main: #f0f2f5;
+  --bg-surface: #ffffff;
+  --bg-sidebar: #1f2231;
+  --bg-navbar: #ffffff;
+  --bg-input: #f3f4f6;
+  
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --border-color: #e5e7eb;
+  
+  --primary-color: #6366f1; /* Mor/Mavi */
+  --primary-hover: #4f46e5;
+  --accent-color: #f97316;  /* Turuncu */
+  --success-color: #10b981;
+  --error-color: #ef4444;
+}
+
+[data-theme="dark"] {
+  /* Karanlık Tema (Dark Mode) - Tasarımdaki Renkler */
+  --bg-main: #13151a;       /* En koyu arkaplan (Ana içerik alanı) */
+  --bg-surface: #1e2028;    /* Kartlar ve paneller */
+  --bg-sidebar: #171920;    /* Sol kenar çubuğu */
+  --bg-navbar: #171920;     /* Üst navigasyon */
+  --bg-input: #272a35;      /* Arama çubuğu vs. */
+  
+  --text-primary: #ffffff;
+  --text-secondary: #9ca3af;
+  --border-color: #2e3240;
+  
+  --primary-color: #7b4dff; /* Tasarımdaki Mor */
+  --primary-hover: #693be0;
+  --accent-color: #ff8a00;  /* Tasarımdaki Turuncu */
+  --success-color: #00d26a; /* Yeşil aktif noktası */
+  --error-color: #ff3b3b;
+}
+
+/* Genel Sınıflar (Utility Classes) */
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Scrollbar Özelleştirme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
