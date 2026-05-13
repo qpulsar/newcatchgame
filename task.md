@@ -1,46 +1,54 @@
 # Project Tasks
 
 ## 1. Repo and Project Kurulumu
-- [ ] Monorepo yapısı oluştur (apps/web-game, apps/api, packages/shared-types)
-- [ ] Frontend kurulumu (Vite + TS + Phaser)
-- [ ] Backend kurulumu (FastAPI + SQLAlchemy + Alembic)
+- [x] Monorepo yapısı oluştur (apps/web-game, apps/api, packages/shared-types)
+- [x] Frontend kurulumu (Vite + TS + Phaser)
+- [x] Backend kurulumu (FastAPI + SQLAlchemy + Alembic)
 
 ## 2. Oyun Çekirdeği
-- [ ] Phaser sahne mimarisi (Boot, Preload, MainMenu, Game, Result, Editor)
-- [ ] Oyun nesneleri (PlayerPad, FallingObject, TargetBox)
-- [ ] Fizik sistemi (Arcade Physics)
-- [ ] İlk oyun modu (Fiziksel Büyüklükleri Sınıflandırma)
+- [x] Phaser sahne mimarisi (Boot, Preload, MainMenu, Game, Result, Editor)
+- [x] Oyun nesneleri (PlayerPad, FallingObject, TargetBox)
+- [x] Fizik sistemi (Arcade Physics)
+- [x] İlk oyun modu (Fiziksel Büyüklükleri Sınıflandırma)
 
 ## 3. Level Veri Yapısı
-- [ ] JSON tabanlı level formatı
-- [ ] Level loader sistemi
+- [x] JSON tabanlı level formatı
+- [x] Level loader sistemi
 
 ## 4. Oyun Editörü
-- [ ] Editör MVP (Temel ayarlar, Hedef/Nesne ekleme)
-- [ ] Editör ekranları
-- [ ] Doğrulama kuralları
+- [x] Editör MVP (Temel ayarlar, Hedef/Nesne ekleme, Backend entegrasyonu)
+- [x] Editör ekranları
+- [x] Doğrulama kuralları
+- [x] Test Etme Özelliği
 
 ## 5. Backend Veri Modeli
-- [ ] Kullanıcı modelleri (Student, Teacher, Admin)
-- [ ] Oyun ve Level modelleri
-- [ ] Oyun denemesi ve Rozet modelleri
+- [x] Kullanıcı modelleri (Student, Teacher, Admin)
+- [x] Oyun ve Level modelleri
+    - [x] Level tablosu (JSON data alanı ile)
+    - [x] GameAttempt tablosu
+    - [x] Badge (Rozet) tablosu
+- [x] Oyun denemesi ve Rozet modelleri
 
 ## 6. API Task List
-- [ ] Auth API
-- [ ] Game & Level API
-- [ ] Attempt & Leaderboard API
+- [x] Auth API
+- [x] Game & Level API
+    - [x] Level CRUD endpoints
+    - [x] Level listeleme (Public/Private)
+- [x] Attempt & Leaderboard API
+    - [x] Skor kaydetme
+    - [x] Liderlik tablosu
 
 ## 7. Oyunlaştırma
-- [ ] Puan sistemi
-- [ ] Rozet sistemi
-- [ ] Lider tablosu
+- [x] Puan sistemi
+- [x] Rozet sistemi
+- [x] Lider tablosu
 
 ## 8. Öğretmen Paneli
-- [ ] Oyun inceleme ve onay sistemi
-- [ ] Sınıf ve öğrenci takibi
+- [x] Oyun inceleme ve onay sistemi
+- [x] Sınıf ve öğrenci takibi
 
 ## 9. Frontend Sayfaları
-- [ ] Login/Register
-- [ ] Dashboard
-- [ ] Game Play / Editor sayfaları
-- [ ] Teacher/Admin panelleri
+- [x] Login/Register
+- [x] Dashboard
+- [x] Game Play / Editor sayfaları
+- [x] Teacher/Admin panelleri

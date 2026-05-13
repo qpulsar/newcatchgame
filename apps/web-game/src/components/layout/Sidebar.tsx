@@ -1,10 +1,14 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Gamepad2, Bug, Settings, HelpCircle, LogOut } from 'lucide-react';
 import './layout.css';
 
 export const Sidebar: React.FC = () => {
   const { t } = useTranslation();
+  const location = useLocation();
+
+  const isActive = (path: string) => location.pathname === path;
 
   return (
     <aside className="app-sidebar">
@@ -24,18 +28,24 @@ export const Sidebar: React.FC = () => {
 
       <nav className="sidebar-nav">
         <ul>
-          <li className="active">
-            <LayoutDashboard size={18} />
-            <span>{t('sidebar.dashboard')}</span>
-          </li>
-          <li>
-            <Users size={18} />
-            <span>{t('sidebar.users')}</span>
-          </li>
-          <li>
-            <Gamepad2 size={18} />
-            <span>{t('sidebar.library')}</span>
-          </li>
+          <Link to="/" style={{ textDecoration: 'none' }}>
+            <li className={isActive('/') ? 'active' : ''}>
+              <LayoutDashboard size={18} />
+              <span>{t('sidebar.dashboard')}</span>
+            </li>
+          </Link>
+          <Link to="/admin" style={{ textDecoration: 'none' }}>
+            <li className={isActive('/admin') ? 'active' : ''}>
+              <Users size={18} />
+              <span>{t('sidebar.users')}</span>
+            </li>
+          </Link>
+          <Link to="/play" style={{ textDecoration: 'none' }}>
+            <li className={isActive('/play') ? 'active' : ''}>
+              <Gamepad2 size={18} />
+              <span>{t('sidebar.library')}</span>
+            </li>
+          </Link>
           <li>
             <Bug size={18} />
             <span>{t('sidebar.bugs')}</span>
@@ -48,9 +58,11 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       <div className="sidebar-footer">
-        <button className="btn-primary upload-btn">
-          <span>+</span> {t('btn.upload')}
-        </button>
+        <Link to="/editor" style={{ textDecoration: 'none' }}>
+          <button className="btn-primary upload-btn">
+            <span>+</span> {t('btn.upload')}
+          </button>
+        </Link>
         <ul>
           <li>
             <HelpCircle size={18} />

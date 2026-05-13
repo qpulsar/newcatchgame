@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -21,3 +22,47 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+# Level Schemas
+class LevelBase(BaseModel):
+    title: str
+    description: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    game_type: Optional[str] = "catch"
+    data: dict
+
+class LevelCreate(LevelBase):
+    pass
+
+class Level(LevelBase):
+    id: int
+    creator_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Game Attempt Schemas
+class GameAttemptCreate(BaseModel):
+    level_id: int
+    score: int
+
+class GameAttempt(GameAttemptCreate):
+    id: int
+    user_id: int
+    completed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Badge Schemas
+class BadgeBase(BaseModel):
+    name: str
+    description: str
+    icon_url: Optional[str] = None
+
+class Badge(BadgeBase):
+    id: int
+
+    class Config:
+        from_attributes = True

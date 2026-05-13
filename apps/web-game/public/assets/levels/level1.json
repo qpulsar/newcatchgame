@@ -1,0 +1,41 @@
+{
+    "id": "phys-basics-1",
+    "title": "Fiziğin Temelleri",
+    "description": "Temel ve türetilmiş büyüklükleri ayırın.",
+    "background": "background",
+    "targets": [
+        {
+            "category": "Temel",
+            "label": "TEMEL BÜYÜKLÜKLER",
+            "color": 1096065,
+            "x": 256,
+            "y": 648,
+            "width": 200,
+            "height": 120
+        },
+        {
+            "category": "Türetilmiş",
+            "label": "TÜRETİLMİŞ BÜYÜKLÜKLER",
+            "color": 15680580,
+            "x": 768,
+            "y": 648,
+            "width": 200,
+            "height": 120
+        }
+    ],
+    "items": [
+        { "text": "Kütle", "category": "Temel", "weight": 1 },
+        { "text": "Zaman", "category": "Temel", "weight": 1 },
+        { "text": "Uzunluk", "category": "Temel", "weight": 1 },
+        { "text": "Hız", "category": "Türetilmiş", "weight": 1 },
+        { "text": "Kuvvet", "category": "Türetilmiş", "weight": 1 },
+        { "text": "Enerji", "category": "Türetilmiş", "weight": 1 },
+        { "text": "Basınç", "category": "Türetilmiş", "weight": 1 }
+    ],
+    "config": {
+        "spawnRate": 2500,
+        "gravityY": 250,
+        "playerSpeed": 600,
+        "winScore": 100
+    }
+}
