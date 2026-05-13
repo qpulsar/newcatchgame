@@ -27,6 +27,11 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <nav className="sidebar-nav">
+        <Link to="/create-game" style={{ textDecoration: 'none' }}>
+          <button className="btn-primary upload-btn" style={{ margin: '0 20px 20px 20px', width: 'calc(100% - 40px)' }}>
+            <Gamepad2 size={18} /> {t('btn.upload')}
+          </button>
+        </Link>
         <ul>
           <Link to="/" style={{ textDecoration: 'none' }}>
             <li className={isActive('/') ? 'active' : ''}>
@@ -46,10 +51,12 @@ export const Sidebar: React.FC = () => {
               <span>{t('sidebar.library')}</span>
             </li>
           </Link>
-          <li>
-            <Bug size={18} />
-            <span>{t('sidebar.bugs')}</span>
-          </li>
+          <Link to="/assets" style={{ textDecoration: 'none' }}>
+            <li className={isActive('/assets') ? 'active' : ''}>
+              <Bug size={18} />
+              <span>Varlık Kütüphanesi</span>
+            </li>
+          </Link>
           <li>
             <Settings size={18} />
             <span>{t('sidebar.settings')}</span>
@@ -58,11 +65,7 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       <div className="sidebar-footer">
-        <Link to="/editor" style={{ textDecoration: 'none' }}>
-          <button className="btn-primary upload-btn">
-            <span>+</span> {t('btn.upload')}
-          </button>
-        </Link>
+
         <ul>
           <li>
             <HelpCircle size={18} />

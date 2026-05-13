@@ -76,3 +76,21 @@ class Badge(BadgeBase):
 
     class Config:
         from_attributes = True
+
+# Asset Schemas
+class AssetBase(BaseModel):
+    name: str
+    type: str
+    url: str
+    thumbnail_url: Optional[str] = None
+
+class AssetCreate(AssetBase):
+    pass
+
+class Asset(AssetBase):
+    id: int
+    creator_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

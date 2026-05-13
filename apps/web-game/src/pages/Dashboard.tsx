@@ -22,8 +22,20 @@ export const Dashboard: React.FC = () => {
         fetch('http://localhost:8000/users/me/badges', {
             headers: { 'Authorization': `Bearer ${token}` }
         })
-        .then(res => res.json())
-        .then(data => setBadges(data))
+        .then(res => {
+            if (res.status === 401) {
+                localStorage.removeItem('token');
+                window.location.reload();
+                return;
+            }
+            if (!res.ok) return [];
+            return res.json();
+        })
+        .then(data => {
+            if (Array.isArray(data)) {
+                setBadges(data);
+            }
+        })
         .catch(err => console.error('Error fetching badges:', err));
 
         // Burada gerçekte istatistikleri ve son denemeleri getiren bir endpoint olmalı

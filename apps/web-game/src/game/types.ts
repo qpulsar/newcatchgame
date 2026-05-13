@@ -7,6 +7,7 @@ export interface GameProject {
     course?: string;
     grade_level?: string;
     topic?: string;
+    tags?: string[];
     language: string;
     visibility: 'public' | 'private' | 'school' | 'class';
     status: 'draft' | 'review' | 'published' | 'archived';
@@ -27,12 +28,16 @@ export interface LevelData {
     instruction?: string;
     learning_goal?: string;
     background: string;
+    music_url?: string;
+    effect_correct?: string;
+    effect_wrong?: string;
     targets: TargetData[];
     correct_concepts: ConceptData[];
     wrong_concepts: ConceptData[];
     duration: number;
     target_score: number;
     success_percentage: number;
+    max_errors?: number;
     config: LevelConfig;
 }
 
@@ -59,11 +64,19 @@ export interface LevelConfig {
     spawnRate: number;
     gravityY: number;
     playerSpeed: number;
-    winScore?: number; // Legacy, use target_score
+    itemSpeed: number;
+    max_items?: number;
+    min_distance?: number;
+    rotation_enabled?: boolean;
+    rotation_speed?: number;
+    canvas_ratio?: '4:3' | '16:9' | 'custom';
+    player_image?: string;
 }
 
 export interface CommonSettings {
     showLeaderboard: boolean;
     allowRetries: boolean;
     themeColor?: string;
+    initial_message?: string;
+    completion_message?: string;
 }

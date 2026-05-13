@@ -1,14 +1,12 @@
 import Phaser from 'phaser';
 import { PlayerPad } from '../objects/PlayerPad';
 import { FallingObject } from '../objects/FallingObject';
-import { TargetBox } from '../objects/TargetBox';
 import type { GameProject, LevelData, ConceptData } from '../types';
 
 export class Game extends Phaser.Scene {
     private player!: PlayerPad;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
     private items!: Phaser.Physics.Arcade.Group;
-    private targets: TargetBox[] = [];
     
     private projectData!: GameProject;
     private currentLevelIndex: number = 0;
@@ -24,6 +22,9 @@ export class Game extends Phaser.Scene {
     private timerEvent?: Phaser.Time.TimerEvent;
     private timeLeft: number = 0;
     private timerText!: Phaser.GameObjects.Text;
+    private errorCount: number = 0;
+    private maxErrors: number = 3;
+    private errorText!: Phaser.GameObjects.Text;
 
     constructor() {
         super('Game');
@@ -85,15 +86,23 @@ export class Game extends Phaser.Scene {
             padding: { x: 10, y: 5 }
         }).setOrigin(0.5);
 
+        this.errorText = this.add.text(width / 2, 120, '', { 
+            fontSize: '18px', 
+            color: '#ff4444', 
+            fontWeight: 'bold' 
+        }).setOrigin(0.5);
+
+        this.maxErrors = this.currentLevelData.max_errors || 3;
+        this.errorCount = 0;
+
+        // Show Initial Message
+        if (this.currentLevelIndex === 0 && this.projectData.data.settings.initial_message) {
+            this.showOverlayMessage(this.projectData.data.settings.initial_message);
+        }
+
         // Oyuncu
         this.player = new PlayerPad(this, width / 2, height - 50);
         this.cursors = this.input.keyboard!.createCursorKeys();
-
-        // Hedef Kutular
-        this.targets = [];
-        this.currentLevelData.targets.forEach(t => {
-            this.targets.push(new TargetBox(this, t.x, t.y, t.width, t.height, t.category, t.color));
-        });
 
         // Düşen Nesneler Grubu
         this.items = this.physics.add.group();
@@ -163,63 +172,76 @@ export class Game extends Phaser.Scene {
         if (item.body) {
             (item.body as Phaser.Physics.Arcade.Body).setGravityY(this.currentLevelData.config.gravityY);
             (item.body as Phaser.Physics.Arcade.Body).setVelocityY(this.currentLevelData.config.itemSpeed || 200);
+            
+            if (this.currentLevelData.config.rotation_enabled) {
+                const speed = (this.currentLevelData.config.rotation_speed || 3) * 30;
+                item.setAngularVelocity(Phaser.Math.Between(-speed, speed));
+            } else {
+                item.setAngularVelocity(0);
+            }
         }
     }
 
     private handleCatch(player: PlayerPad, item: FallingObject) {
-        let matched = false;
-        let correctTarget = false;
-
-        for (const target of this.targets) {
-            const bounds = target.getBounds();
-            if (Phaser.Geom.Intersects.RectangleToRectangle(player.getBounds(), bounds)) {
-                if (item.category === target.category) {
-                    this.levelScore += 10;
-                    this.totalScore += 10;
-                    this.showFeedback('Doğru!', 0x10b981);
-                    correctTarget = true;
-                } else {
-                    this.levelScore -= 5;
-                    this.totalScore -= 5;
-                    this.showFeedback('Yanlış Kategori!', 0xef4444);
-                }
-                matched = true;
-                break;
-            }
-        }
-
-        if (!matched) {
-            // Check if it was a "correct" item but caught outside a target
-            const isCorrectConcept = this.currentLevelData.correct_concepts.some(c => c.text === item.text);
-            if (isCorrectConcept) {
-                this.levelScore += 2;
-                this.totalScore += 2;
-                this.showFeedback('Yakalandı!', 0x3b82f6);
-            } else {
-                this.levelScore -= 2;
-                this.totalScore -= 2;
-                this.showFeedback('Dikkat!', 0xf59e0b);
-            }
+        // Check if the item is in the correct concepts list
+        const isCorrect = this.currentLevelData.correct_concepts.some(c => c.text === item.text);
+        
+        if (isCorrect) {
+            this.levelScore += 10;
+            this.totalScore += 10;
+            this.showFeedback('Doğru!', 0x10b981);
+        } else {
+            this.levelScore -= 5;
+            this.totalScore -= 5;
+            this.errorCount++;
+            this.showFeedback('Yanlış!', 0xef4444);
+            this.updateErrorDisplay();
         }
 
         this.scoreText.setText(`Skor: ${this.totalScore}`);
         item.destroy();
 
-        // Immediate win if target score reached (optional)
-        if (this.levelScore >= this.currentLevelData.target_score) {
-            // this.handleLevelEnd(); 
+        if (this.errorCount >= this.maxErrors) {
+            this.handleLevelEnd(false);
         }
     }
 
-    private async handleLevelEnd() {
+    private updateErrorDisplay() {
+        if (this.errorCount > 0) {
+            this.errorText.setText(`Hatalar: ${this.errorCount}/${this.maxErrors}`);
+        }
+    }
+
+    private showOverlayMessage(msg: string) {
+        const { width, height } = this.scale;
+        const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+        const text = this.add.text(width / 2, height / 2, msg, {
+            fontSize: '32px',
+            color: '#fff',
+            align: 'center',
+            wordWrap: { width: width * 0.8 }
+        }).setOrigin(0.5);
+
+        this.physics.pause();
+        
+        this.input.once('pointerdown', () => {
+            bg.destroy();
+            text.destroy();
+            this.physics.resume();
+        });
+    }
+
+    private async handleLevelEnd(isSuccessOverride?: boolean) {
         this.physics.pause();
         this.timerEvent?.remove();
         
-        const isSuccess = this.levelScore >= this.currentLevelData.target_score;
+        const isSuccess = isSuccessOverride !== undefined ? isSuccessOverride : (this.levelScore >= this.currentLevelData.target_score);
         
         const { width, height } = this.scale;
-        const msg = isSuccess ? 'SEVİYE TAMAMLANDI!' : 'SÜRE DOLDU';
-        const color = isSuccess ? '#10b981' : '#f59e0b';
+        let msg = isSuccess ? 'SEVİYE TAMAMLANDI!' : 'BAŞARISIZ';
+        if (this.errorCount >= this.maxErrors) msg = 'ÇOK FAZLA HATA!';
+        
+        const color = isSuccess ? '#10b981' : '#ef4444';
 
         const endText = this.add.text(width / 2, height / 2, msg, { 
             fontSize: '64px', 
@@ -239,7 +261,12 @@ export class Game extends Phaser.Scene {
                 });
             } else {
                 // Game Over / Project Complete
-                this.handleProjectComplete();
+                if (isSuccess && this.projectData.data.settings.completion_message) {
+                    this.showOverlayMessage(this.projectData.data.settings.completion_message);
+                    this.time.delayedCall(3000, () => this.handleProjectComplete());
+                } else {
+                    this.handleProjectComplete();
+                }
             }
         });
     }
@@ -257,8 +284,8 @@ export class Game extends Phaser.Scene {
                     body: JSON.stringify({
                         level_id: this.projectData.id,
                         score: this.totalScore,
-                        accuracy: 100, // TODO: calculate
-                        duration: 0, // TODO: calculate
+                        accuracy: 100,
+                        duration: 0,
                         details: {
                             totalLevels: this.projectData.data.levels.length,
                             completedLevels: this.currentLevelIndex + 1
@@ -269,8 +296,7 @@ export class Game extends Phaser.Scene {
                 console.error('Score save error:', err);
             }
         }
-
-        this.scene.start('MainMenu'); // TODO: Create a Result scene
+        this.scene.start('MainMenu'); 
     }
 
     private showFeedback(text: string, color: number) {

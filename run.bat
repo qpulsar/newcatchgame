@@ -22,11 +22,11 @@ echo %GREEN%EduGame Studio baslatiliyor...%NC%
 
 REM 1. Backend Baslatma
 echo %BLUE%Backend (FastAPI) baslatiliyor...%NC%
-start "Backend" cmd /c "cd apps\api && (if exist venv\Scripts\activate (call venv\Scripts\activate) else if exist .venv\Scripts\activate (call .venv\Scripts\activate)) && uvicorn main:app --reload --port 8000"
+start "Backend" cmd /k "cd apps\api && if exist venv\Scripts\uvicorn.exe (venv\Scripts\uvicorn main:app --reload --port 8000) else if exist .venv\Scripts\uvicorn.exe (.venv\Scripts\uvicorn main:app --reload --port 8000) else (uvicorn main:app --reload --port 8000)"
 
 REM 2. Frontend Baslatma
 echo %BLUE%Frontend (Vite + React) baslatiliyor...%NC%
-start "Frontend" cmd /c "cd apps\web-game && npm run dev -- --port 5173"
+start "Frontend" cmd /k "cd apps\web-game && npm run dev -- --port 5173"
 
 echo %GREEN%------------------------------------------%NC%
 echo %GREEN%Sistem Hazir!%NC%

@@ -78,3 +78,13 @@ class UserBadge(Base):
     
     user = relationship("User", back_populates="badges")
     badge = relationship("Badge")
+
+class Asset(Base):
+    __tablename__ = "assets"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    type = Column(String) # background, music, sound, font, spritesheet, effect
+    url = Column(String)
+    thumbnail_url = Column(String, nullable=True)
+    creator_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -12,7 +12,7 @@ interface BadgeGridProps {
 }
 
 export const BadgeGrid: React.FC<BadgeGridProps> = ({ badges }) => {
-    if (badges.length === 0) {
+    if (!Array.isArray(badges) || badges.length === 0) {
         return (
             <div style={{ textAlign: 'center', padding: '40px', background: 'rgba(0,0,0,0.02)', borderRadius: '12px' }}>
                 <p style={{ color: 'var(--text-secondary)' }}>Henüz rozet kazanılmamış. Oyun oynayarak rozet kazanabilirsin!</p>

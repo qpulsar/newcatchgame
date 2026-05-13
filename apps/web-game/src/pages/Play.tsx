@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { GameContainer } from '../components/game/GameContainer';
-import { Play as PlayIcon, Info, Trophy } from 'lucide-react';
+import { Play as PlayIcon, Info, Trophy, Edit2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export const Play: React.FC = () => {
+    const navigate = useNavigate();
     const [levels, setLevels] = useState<any[]>([]);
     const [selectedLevel, setSelectedLevel] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -20,6 +22,11 @@ export const Play: React.FC = () => {
                 setLoading(false);
             });
     }, []);
+
+    const handleEdit = (e: React.MouseEvent, level: any) => {
+        e.stopPropagation();
+        navigate('/editor', { state: { projectToLoad: level } });
+    };
 
     if (selectedLevel) {
         return (
@@ -78,7 +85,8 @@ export const Play: React.FC = () => {
                                 border: '1px solid var(--border-color)', 
                                 overflow: 'hidden',
                                 transition: 'transform 0.2s',
-                                cursor: 'pointer'
+                                cursor: 'pointer',
+                                position: 'relative'
                             }}
                             onClick={() => setSelectedLevel(lvl)}
                             onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
@@ -106,6 +114,31 @@ export const Play: React.FC = () => {
                                     }}>
                                         {lvl.game_type?.toUpperCase() || 'CATCH'}
                                     </div>
+
+                                    {/* Edit Button Overly */}
+                                    <button 
+                                        onClick={(e) => handleEdit(e, lvl)}
+                                        style={{
+                                            position: 'absolute',
+                                            bottom: '12px',
+                                            right: '12px',
+                                            background: 'var(--primary-color)',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '8px',
+                                            padding: '8px 12px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontSize: '0.8rem',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                            zIndex: 10
+                                        }}
+                                    >
+                                        <Edit2 size={14} /> Düzenle
+                                    </button>
                                 </div>
                                 <div style={{ padding: '20px' }}>
                                     <h3 style={{ margin: '0 0 8px 0' }}>{lvl.title}</h3>

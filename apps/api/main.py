@@ -1,14 +1,33 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from datetime import timedelta
-from typing import List
+from datetime import timedelta, datetime
+from typing import List, Optional
+import shutil
+import os
+import uuid
+import logging
 
 import models, schemas, auth, database
 
-# Veritabanı tablolarını oluştur (Prototype için hızlı çözüm)
+# Loglama yapılandırması
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Veritabanı tablolarını oluştur
 models.Base.metadata.create_all(bind=database.engine)
+
+# Dosya yükleme dizini oluştur
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
+app = FastAPI(title="EduGame Studio API")
+
+# Statik dosyaları dışarı aç
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Başlangıç rozetlerini ekle
 def seed_badges():
@@ -29,15 +48,27 @@ def seed_badges():
     finally:
         db.close()
 
+# Başlangıç kullanıcılarını ekle
+def seed_users():
+    db = database.SessionLocal()
+    try:
+        admin_email = "admin@edugame.com"
+        exists = db.query(models.User).filter(models.User.email == admin_email).first()
+        if not exists:
+            hashed_password = auth.get_password_hash("admin123")
+            new_user = models.User(
+                email=admin_email,
+                full_name="Sistem Yöneticisi",
+                hashed_password=hashed_password,
+                role="admin"
+            )
+            db.add(new_user)
+            db.commit()
+    finally:
+        db.close()
+
 seed_badges()
-
-app = FastAPI(title="EduGame Studio API")
-
-import logging
-
-# Loglama yapılandırması
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+seed_users()
 
 origins = [
     "http://localhost:5173",
@@ -53,15 +84,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.middleware("http")
-async def log_requests(request, call_next):
-    try:
-        response = await call_next(request)
-        return response
-    except Exception as e:
-        logger.error(f"Request failed: {e}")
-        raise e
 
 @app.get("/")
 def read_root():
@@ -125,6 +147,80 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+def get_current_admin(current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user
+
+# --- User Management (Admin) ---
+
+@app.get("/users", response_model=List[schemas.User])
+def list_users(
+    db: Session = Depends(database.get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    return db.query(models.User).all()
+
+@app.post("/users", response_model=schemas.User)
+def admin_create_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(database.get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_password = auth.get_password_hash(user.password)
+    new_user = models.User(
+        email=user.email,
+        full_name=user.full_name,
+        hashed_password=hashed_password,
+        role=user.role
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.put("/users/{user_id}", response_model=schemas.User)
+def admin_update_user(
+    user_id: int,
+    user_update: schemas.UserCreate,
+    db: Session = Depends(database.get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    db_user.email = user_update.email
+    db_user.full_name = user_update.full_name
+    db_user.role = user_update.role
+    if user_update.password:
+        db_user.hashed_password = auth.get_password_hash(user_update.password)
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.delete("/users/{user_id}")
+def admin_delete_user(
+    user_id: int,
+    db: Session = Depends(database.get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if db_user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+        
+    db.delete(db_user)
+    db.commit()
+    return {"message": "User deleted successfully"}
 
 # --- Level Endpoints ---
 
@@ -277,3 +373,68 @@ def get_my_badges(
         .filter(models.UserBadge.user_id == current_user.id)\
         .all()
     return results
+
+# --- Asset Endpoints ---
+
+@app.get("/assets", response_model=List[schemas.Asset])
+def list_assets(
+    asset_type: Optional[str] = None,
+    db: Session = Depends(database.get_db)
+):
+    query = db.query(models.Asset)
+    if asset_type:
+        query = query.filter(models.Asset.type == asset_type)
+    return query.all()
+
+@app.post("/assets/upload", response_model=schemas.Asset)
+async def upload_asset(
+    name: str = Form(...),
+    type: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Benzersiz dosya adı oluştur
+    file_extension = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(UPLOAD_DIR, unique_filename)
+    
+    # Dosyayı kaydet
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Veritabanına kaydet
+    asset_url = f"http://localhost:8000/uploads/{unique_filename}"
+    db_asset = models.Asset(
+        name=name,
+        type=type,
+        url=asset_url,
+        creator_id=current_user.id
+    )
+    db.add(db_asset)
+    db.commit()
+    db.refresh(db_asset)
+    return db_asset
+
+@app.delete("/assets/{asset_id}")
+def delete_asset(
+    asset_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_asset = db.query(models.Asset).filter(models.Asset.id == asset_id).first()
+    if not db_asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    
+    if db_asset.creator_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Dosyayı sil
+    filename = db_asset.url.split("/")[-1]
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        
+    db.delete(db_asset)
+    db.commit()
+    return {"message": "Asset deleted successfully"}
