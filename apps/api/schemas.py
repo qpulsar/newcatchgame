@@ -29,6 +29,12 @@ class LevelBase(BaseModel):
     description: Optional[str] = None
     thumbnail_url: Optional[str] = None
     game_type: Optional[str] = "catch"
+    course: Optional[str] = None
+    grade_level: Optional[str] = None
+    topic: Optional[str] = None
+    language: Optional[str] = "tr"
+    visibility: Optional[str] = "public"
+    status: Optional[str] = "draft"
     data: dict
 
 class LevelCreate(LevelBase):
@@ -38,6 +44,7 @@ class Level(LevelBase):
     id: int
     creator_id: int
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -46,6 +53,9 @@ class Level(LevelBase):
 class GameAttemptCreate(BaseModel):
     level_id: int
     score: int
+    accuracy: Optional[float] = None
+    duration: Optional[int] = None
+    details: Optional[dict] = None
 
 class GameAttempt(GameAttemptCreate):
     id: int

@@ -33,7 +33,7 @@ export const Play: React.FC = () => {
                         <button onClick={() => setSelectedLevel(null)} className="btn-secondary">Geri Dön</button>
                     </header>
                     
-                    <GameContainer levelData={{ ...selectedLevel.data, id: selectedLevel.id }} />
+                    <GameContainer projectData={selectedLevel} />
                     
                     <div className="game-info" style={{ marginTop: '30px', width: '100%', maxWidth: '1024px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>

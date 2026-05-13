@@ -33,10 +33,17 @@ seed_badges()
 
 app = FastAPI(title="EduGame Studio API")
 
+import logging
+
+# Loglama yapılandırması
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:5174", # Vite sometimes uses 5174
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
 ]
 
 app.add_middleware(
@@ -46,6 +53,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        logger.error(f"Request failed: {e}")
+        raise e
 
 @app.get("/")
 def read_root():
@@ -123,6 +139,12 @@ def create_level(
         description=level.description,
         thumbnail_url=level.thumbnail_url,
         game_type=level.game_type,
+        course=level.course,
+        grade_level=level.grade_level,
+        topic=level.topic,
+        language=level.language,
+        visibility=level.visibility,
+        status=level.status,
         data=level.data,
         creator_id=current_user.id
     )
@@ -133,7 +155,12 @@ def create_level(
 
 @app.get("/levels", response_model=List[schemas.Level])
 def list_levels(db: Session = Depends(database.get_db)):
-    return db.query(models.Level).all()
+    try:
+        levels = db.query(models.Level).all()
+        return levels
+    except Exception as e:
+        logger.error(f"Error listing levels: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/levels/{level_id}", response_model=schemas.Level)
 def get_level(level_id: int, db: Session = Depends(database.get_db)):
@@ -159,6 +186,12 @@ def update_level(
     db_level.description = level_update.description
     db_level.thumbnail_url = level_update.thumbnail_url
     db_level.game_type = level_update.game_type
+    db_level.course = level_update.course
+    db_level.grade_level = level_update.grade_level
+    db_level.topic = level_update.topic
+    db_level.language = level_update.language
+    db_level.visibility = level_update.visibility
+    db_level.status = level_update.status
     db_level.data = level_update.data
     
     db.commit()
@@ -176,7 +209,10 @@ def create_attempt(
     db_attempt = models.GameAttempt(
         user_id=current_user.id,
         level_id=attempt.level_id,
-        score=attempt.score
+        score=attempt.score,
+        accuracy=attempt.accuracy,
+        duration=attempt.duration,
+        details=attempt.details
     )
     db.add(db_attempt)
     db.commit()

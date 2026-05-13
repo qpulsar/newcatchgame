@@ -30,9 +30,19 @@ class Level(Base):
     description = Column(String)
     thumbnail_url = Column(String, nullable=True)
     game_type = Column(String, default="catch") # e.g., catch, sort, quiz
-    data = Column(JSON) # Phaser level JSON
+    
+    # Project Metadata
+    course = Column(String, nullable=True)
+    grade_level = Column(String, nullable=True)
+    topic = Column(String, nullable=True)
+    language = Column(String, default="tr")
+    visibility = Column(String, default="public") # public, private, school, class
+    status = Column(String, default="draft") # draft, review, published, archived
+    
+    data = Column(JSON) # Now stores a GameProject structure with multiple levels
     creator_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     creator = relationship("User", back_populates="levels")
     attempts = relationship("GameAttempt", back_populates="level")
@@ -44,6 +54,9 @@ class GameAttempt(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     level_id = Column(Integer, ForeignKey("levels.id"))
     score = Column(Integer)
+    accuracy = Column(Float, nullable=True)
+    duration = Column(Integer, nullable=True) # in seconds
+    details = Column(JSON, nullable=True) # Level-based results, errors
     completed_at = Column(DateTime, default=datetime.utcnow)
     
     user = relationship("User", back_populates="attempts")

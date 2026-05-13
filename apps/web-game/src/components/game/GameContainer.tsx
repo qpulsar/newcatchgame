@@ -1,22 +1,29 @@
 import React, { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
 import { GameConfig } from '../../game/config';
+import type { GameProject } from '../../game/types';
 
 interface GameContainerProps {
-    levelData?: any;
+    projectData?: GameProject;
+    levelIndex?: number;
+    isTestMode?: boolean;
+    levelData?: any; // For legacy support
 }
 
-export const GameContainer: React.FC<GameContainerProps> = ({ levelData }) => {
+export const GameContainer: React.FC<GameContainerProps> = ({ projectData, levelIndex, isTestMode, levelData }) => {
     const gameRef = useRef<Phaser.Game | null>(null);
 
     useEffect(() => {
         if (!gameRef.current) {
             const config = { ...GameConfig };
             
-            // Level verisini Phaser'a aktar
+            // Verileri Phaser'a aktar
             config.callbacks = {
                 preBoot: (game) => {
-                    game.registry.set('levelData', levelData);
+                    game.registry.set('projectData', projectData);
+                    game.registry.set('levelIndex', levelIndex || 0);
+                    game.registry.set('isTestMode', isTestMode || false);
+                    game.registry.set('levelData', levelData); // Legacy
                 }
             };
 
@@ -29,7 +36,7 @@ export const GameContainer: React.FC<GameContainerProps> = ({ levelData }) => {
                 gameRef.current = null;
             }
         };
-    }, [levelData]);
+    }, [projectData, levelIndex, isTestMode, levelData]);
 
     return (
         <div 
