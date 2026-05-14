@@ -22,7 +22,7 @@ export const Sidebar: React.FC = () => {
         </div>
         <div className="profile-info">
           <span className="profile-title">Yönetici Paneli</span>
-          <span className="profile-subtitle">V2.4.0 KURUMSAL</span>
+          <span className="profile-subtitle">V0.1</span>
         </div>
       </div>
 

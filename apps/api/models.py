@@ -45,7 +45,7 @@ class Level(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     creator = relationship("User", back_populates="levels")
-    attempts = relationship("GameAttempt", back_populates="level")
+    attempts = relationship("GameAttempt", back_populates="level", cascade="all, delete-orphan")
 
 class GameAttempt(Base):
     __tablename__ = "game_attempts"

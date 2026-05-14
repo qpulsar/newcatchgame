@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 export class PlayerPad extends Phaser.Physics.Arcade.Sprite {
-    constructor(scene: Phaser.Scene, x: number, y: number) {
-        super(scene, x, y, 'player');
+    constructor(scene: Phaser.Scene, x: number, y: number, textureKey: string = 'player') {
+        super(scene, x, y, textureKey);
         
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -11,7 +11,11 @@ export class PlayerPad extends Phaser.Physics.Arcade.Sprite {
         this.setImmovable(true);
         
         // Boyutlandırma (Gerekirse)
-        this.setDisplaySize(120, 20);
+        if (textureKey === 'player') {
+            this.setDisplaySize(120, 20);
+        } else {
+            this.setDisplaySize(80, 80); // Default for custom images
+        }
     }
 
     update(cursors: Phaser.Types.Input.Keyboard.CursorKeys) {

@@ -57,6 +57,31 @@ export class Game extends Phaser.Scene {
         this.levelScore = 0;
     }
 
+    preload() {
+        if (!this.currentLevelData) return;
+
+        // Load dynamic level background
+        const bg = this.currentLevelData.background;
+        if (bg && (bg.startsWith('http') || bg.includes('.') || bg.includes('/'))) {
+            this.load.image(bg, bg);
+        }
+
+        // Load player image
+        const pImg = this.currentLevelData.config.player_image;
+        if (pImg && (pImg.startsWith('http') || pImg.includes('.') || pImg.includes('/'))) {
+            this.load.image(pImg, pImg);
+        }
+
+        // Load screens backgrounds
+        if (this.currentLevelData.screens) {
+            Object.values(this.currentLevelData.screens).forEach(screen => {
+                if (screen.background && (screen.background.startsWith('http') || screen.background.includes('.') || screen.background.includes('/'))) {
+                    this.load.image(screen.background, screen.background);
+                }
+            });
+        }
+    }
+
     create() {
         if (!this.currentLevelData) {
             console.error('Level data not found!');
@@ -95,13 +120,11 @@ export class Game extends Phaser.Scene {
         this.maxErrors = this.currentLevelData.max_errors || 3;
         this.errorCount = 0;
 
-        // Show Initial Message
-        if (this.currentLevelIndex === 0 && this.projectData.data.settings.initial_message) {
-            this.showOverlayMessage(this.projectData.data.settings.initial_message);
-        }
-
         // Oyuncu
-        this.player = new PlayerPad(this, width / 2, height - 50);
+        const playerKey = (this.currentLevelData.config.player_image && this.currentLevelData.config.player_image !== '') 
+            ? this.currentLevelData.config.player_image 
+            : 'player';
+        this.player = new PlayerPad(this, width / 2, height - 50, playerKey);
         this.cursors = this.input.keyboard!.createCursorKeys();
 
         // Düşen Nesneler Grubu
@@ -110,6 +133,31 @@ export class Game extends Phaser.Scene {
         // Çarpışma
         this.physics.add.overlap(this.player, this.items, this.handleCatch as any, undefined, this);
 
+        // Initial State
+        this.physics.pause();
+        
+        // Show Cover Screen
+        if (this.currentLevelData.screens?.cover) {
+            this.showLevelScreen('cover', () => {
+                if (this.currentLevelData.screens?.infoStart?.enabled) {
+                    this.showLevelScreen('infoStart', () => this.startGame());
+                } else {
+                    this.startGame();
+                }
+            });
+        } else {
+            this.startGame();
+        }
+
+        // ESC ile menüye dön
+        this.input.keyboard?.once('keydown-ESC', () => {
+            this.scene.start('MainMenu');
+        });
+    }
+
+    private startGame() {
+        this.physics.resume();
+        
         // Spawn Timer
         this.time.addEvent({
             delay: this.currentLevelData.config.spawnRate,
@@ -125,11 +173,6 @@ export class Game extends Phaser.Scene {
             callback: this.updateTimer,
             callbackScope: this,
             loop: true
-        });
-
-        // ESC ile menüye dön
-        this.input.keyboard?.once('keydown-ESC', () => {
-            this.scene.start('MainMenu');
         });
     }
 
@@ -212,15 +255,68 @@ export class Game extends Phaser.Scene {
         }
     }
 
+    private showLevelScreen(type: string, onComplete: () => void) {
+        const screens = this.currentLevelData.screens as any;
+        if (!screens || !screens[type]) {
+            onComplete();
+            return;
+        }
+
+        const config = screens[type];
+        
+        const { width, height } = this.scale;
+        const container = this.add.container(0, 0).setDepth(2000);
+
+        // Background
+        const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8);
+        container.add(overlay);
+
+        if (config.background) {
+            const screenBg = this.add.image(width / 2, height / 2, config.background).setDisplaySize(width, height);
+            container.add(screenBg);
+            // Re-add overlay on top of custom bg but with less opacity if desired
+            const subOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.4);
+            container.add(subOverlay);
+        }
+
+        // Content
+        const title = this.add.text(width / 2, height / 3, config.title, {
+            fontSize: '48px', color: '#ffffff', fontWeight: 'bold', align: 'center', wordWrap: { width: width * 0.8 },
+            stroke: '#000', strokeThickness: 6
+        }).setOrigin(0.5);
+        
+        const desc = this.add.text(width / 2, height / 2, config.description, {
+            fontSize: '24px', color: '#eeeeee', align: 'center', wordWrap: { width: width * 0.7 },
+            stroke: '#000', strokeThickness: 3
+        }).setOrigin(0.5);
+
+        const btn = this.add.text(width / 2, height * 0.75, config.buttonText || 'Devam Et', {
+            fontSize: '28px', color: '#ffffff', backgroundColor: '#6366f1', padding: { x: 30, y: 15 },
+            fontFamily: 'Arial', fontWeight: 'bold'
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerdown', () => {
+            container.destroy();
+            onComplete();
+        })
+        .on('pointerover', () => btn.setStyle({ backgroundColor: '#4f46e5' }))
+        .on('pointerout', () => btn.setStyle({ backgroundColor: '#6366f1' }));
+
+        container.add([title, desc, btn]);
+        
+        this.physics.pause();
+    }
+
     private showOverlayMessage(msg: string) {
         const { width, height } = this.scale;
-        const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.7);
+        const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0.8).setDepth(3000);
         const text = this.add.text(width / 2, height / 2, msg, {
             fontSize: '32px',
             color: '#fff',
             align: 'center',
             wordWrap: { width: width * 0.8 }
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setDepth(3001);
 
         this.physics.pause();
         
@@ -234,41 +330,46 @@ export class Game extends Phaser.Scene {
     private async handleLevelEnd(isSuccessOverride?: boolean) {
         this.physics.pause();
         this.timerEvent?.remove();
+        this.items.clear(true, true);
         
         const isSuccess = isSuccessOverride !== undefined ? isSuccessOverride : (this.levelScore >= this.currentLevelData.target_score);
         
-        const { width, height } = this.scale;
-        let msg = isSuccess ? 'SEVİYE TAMAMLANDI!' : 'BAŞARISIZ';
-        if (this.errorCount >= this.maxErrors) msg = 'ÇOK FAZLA HATA!';
-        
-        const color = isSuccess ? '#10b981' : '#ef4444';
-
-        const endText = this.add.text(width / 2, height / 2, msg, { 
-            fontSize: '64px', 
-            color: color, 
-            fontWeight: 'bold',
-            stroke: '#000',
-            strokeThickness: 6
-        }).setOrigin(0.5);
-
-        this.time.delayedCall(2000, () => {
-            if (isSuccess && this.currentLevelIndex < this.projectData.data.levels.length - 1) {
-                // Next Level
+        if (isSuccess) {
+            this.showLevelScreen('victory', () => {
+                if (this.currentLevelData.screens?.infoEnd?.enabled) {
+                    this.showLevelScreen('infoEnd', () => this.goToNextStep(true));
+                } else {
+                    this.goToNextStep(true);
+                }
+            });
+        } else {
+            this.showLevelScreen('defeat', () => {
                 this.scene.restart({ 
                     projectData: this.projectData, 
-                    levelIndex: this.currentLevelIndex + 1,
+                    levelIndex: this.currentLevelIndex,
                     isTestMode: this.isTestMode
                 });
+            });
+        }
+    }
+
+    private goToNextStep(isSuccess: boolean) {
+        if (isSuccess && this.currentLevelIndex < this.projectData.data.levels.length - 1) {
+            // Next Level
+            this.scene.restart({ 
+                projectData: this.projectData, 
+                levelIndex: this.currentLevelIndex + 1,
+                isTestMode: this.isTestMode
+            });
+        } else {
+            // Game Over / Project Complete
+            if (isSuccess && this.projectData.data.settings.completion_message) {
+                this.showOverlayMessage(this.projectData.data.settings.completion_message);
+                this.time.delayedCall(3000, () => this.handleProjectComplete());
             } else {
-                // Game Over / Project Complete
-                if (isSuccess && this.projectData.data.settings.completion_message) {
-                    this.showOverlayMessage(this.projectData.data.settings.completion_message);
-                    this.time.delayedCall(3000, () => this.handleProjectComplete());
-                } else {
-                    this.handleProjectComplete();
-                }
+                this.handleProjectComplete();
             }
-        });
+        }
     }
 
     private async handleProjectComplete() {

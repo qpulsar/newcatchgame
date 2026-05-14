@@ -5,7 +5,7 @@ import type { GameProject, LevelData, ConceptData, TargetData } from '../game/ty
 import { 
     Save, Plus, Trash2, Settings as SettingsIcon, Layout, Database, 
     Play, X, ChevronRight, Copy, ArrowUp, ArrowDown, Info, 
-    Palette, Music, Zap, BarChart2, Globe, Monitor
+    Palette, Music, Zap, BarChart2, Globe, Monitor, Trophy, Flag
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -13,6 +13,16 @@ type EditorTab = 'general' | 'levels' | 'concepts' | 'screens' | 'visual' | 'aud
 type EditorPhase = 'basics' | 'content' | 'design' | 'rules';
 
 // --- Helper Functions ---
+function createDefaultScreens() {
+    return {
+        cover: { title: 'Hazır mısın?', description: 'Tüm doğru nesneleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
+        victory: { title: 'Harika!', description: 'Seviyeyi başarıyla tamamladın.', buttonText: 'Sıradaki Seviye' },
+        defeat: { title: 'Olamaz!', description: 'Skorun yetersiz kaldı. Tekrar denemek ister misin?', buttonText: 'Tekrar Dene' },
+        infoStart: { title: 'Bilgi', description: 'Bu seviyede fiziksel büyüklükleri öğreneceğiz.', buttonText: 'Anladım', enabled: false },
+        infoEnd: { title: 'Özet', description: 'Harika iş çıkardın! Temel büyüklükleri kavradın.', buttonText: 'Devam Et', enabled: false }
+    };
+}
+
 function createDefaultLevel(title: string): LevelData {
     return {
         id: crypto.randomUUID(),
@@ -21,8 +31,8 @@ function createDefaultLevel(title: string): LevelData {
         learning_goal: '',
         background: 'background',
         targets: [
-            { category: 'A', label: 'HEDEF A', color: 0x6366f1, x: 256, y: 648, width: 200, height: 120 },
-            { category: 'B', label: 'HEDEF B', color: 0xec4899, x: 768, y: 648, width: 200, height: 120 }
+            { category: 'A', label: 'Hedef A', color: 0x6366f1, x: 256, y: 648, width: 200, height: 120 },
+            { category: 'B', label: 'Hedef B', color: 0xec4899, x: 768, y: 648, width: 200, height: 120 }
         ],
         correct_concepts: [{ text: 'Doğru 1', category: 'A', weight: 1 }],
         wrong_concepts: [{ text: 'Yanlış 1', category: 'B', weight: 1 }],
@@ -35,13 +45,7 @@ function createDefaultLevel(title: string): LevelData {
             playerSpeed: 600,
             itemSpeed: 200
         },
-        screens: {
-            cover: { title: 'Hazır mısın?', description: 'Tüm doğru nesneleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
-            victory: { title: 'Harika!', description: 'Seviyeyi başarıyla tamamladın.', buttonText: 'Sıradaki Seviye' },
-            defeat: { title: 'Olamaz!', description: 'Skorun yetersiz kaldı. Tekrar denemek ister misin?', buttonText: 'Tekrar Dene' },
-            infoStart: { title: 'Bilgi', description: 'Bu seviyede fiziksel büyüklükleri öğreneceğiz.', buttonText: 'Anladım', enabled: false },
-            infoEnd: { title: 'Özet', description: 'Harika iş çıkardın! Temel büyüklükleri kavradın.', buttonText: 'Devam Et', enabled: false }
-        }
+        screens: createDefaultScreens()
     } as any;
 }
 
@@ -102,13 +106,13 @@ export const LevelEditor: React.FC = () => {
         return (
             <div className="asset-picker-field" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', marginBottom: '6px', color: 'var(--text-secondary)' }}>{label}</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <select 
                         value={filtered.some(a => a.url === value) ? value : 'custom'} 
                         onChange={(e) => {
                             if (e.target.value !== 'custom') onChange(e.target.value);
                         }}
-                        style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
                     >
                         <option value="custom">Özel URL veya Sabit...</option>
                         {filtered.map(a => (
@@ -120,7 +124,7 @@ export const LevelEditor: React.FC = () => {
                             placeholder="URL girin..."
                             value={value}
                             onChange={(e) => onChange(e.target.value)}
-                            style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
                         />
                     )}
                 </div>
@@ -195,7 +199,14 @@ export const LevelEditor: React.FC = () => {
                     { text: 'İvme', category: 'Türetilmiş', weight: 1 },
                 ],
                 duration: 60, target_score: 50, success_percentage: 70,
-                config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200 }
+                config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200 },
+                screens: {
+                    cover: { title: 'Temel Büyüklükler', description: 'Yalnızca temel büyüklükleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
+                    victory: { title: 'Tebrikler!', description: 'Temel büyüklükleri başarıyla kavradın.', buttonText: 'Sıradaki Seviye' },
+                    defeat: { title: 'Hatalı Seçim!', description: 'Skorun yetersiz kaldı. Tekrar denemek ister misin?', buttonText: 'Tekrar Dene' },
+                    infoStart: { title: 'Bilgi', description: 'Bu seviyede fiziksel büyüklükleri öğreneceğiz.', buttonText: 'Anladım', enabled: false },
+                    infoEnd: { title: 'Özet', description: 'Harika iş çıkardın! Temel büyüklükleri kavradın.', buttonText: 'Devam Et', enabled: false }
+                }
             },
             {
                 id: crypto.randomUUID(),
@@ -216,7 +227,8 @@ export const LevelEditor: React.FC = () => {
                     { text: 'Kütle', category: 'Temel', weight: 1 },
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
-                config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220 }
+                config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220 },
+                screens: createDefaultScreens()
             },
             {
                 id: crypto.randomUUID(),
@@ -237,7 +249,8 @@ export const LevelEditor: React.FC = () => {
                     { text: 'İvme', category: 'Vektörel', weight: 1 },
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
-                config: { spawnRate: 1300, gravityY: 400, playerSpeed: 600, itemSpeed: 240 }
+                config: { spawnRate: 1300, gravityY: 400, playerSpeed: 600, itemSpeed: 240 },
+                screens: createDefaultScreens()
             },
             {
                 id: crypto.randomUUID(),
@@ -258,7 +271,8 @@ export const LevelEditor: React.FC = () => {
                     { text: 'Kütle', category: 'Skaler', weight: 1 },
                 ],
                 duration: 60, target_score: 70, success_percentage: 70,
-                config: { spawnRate: 1200, gravityY: 450, playerSpeed: 600, itemSpeed: 260 }
+                config: { spawnRate: 1200, gravityY: 450, playerSpeed: 600, itemSpeed: 260 },
+                screens: createDefaultScreens()
             }
         ];
         
@@ -342,7 +356,7 @@ export const LevelEditor: React.FC = () => {
                 <header className="editor-header">
                     <div className="header-left">
                         <div className="project-meta">
-                            <span className="status-badge">{project.status.toUpperCase()}</span>
+                            <span className="status-badge">{project.status}</span>
                             <h1 title={project.title}>{project.title}</h1>
                         </div>
                         <div className="phase-nav">
@@ -375,33 +389,33 @@ export const LevelEditor: React.FC = () => {
                 <div className="editor-main-layout">
                     {/* SLIM LEFT PANEL: Settings & Tabs */}
                     <aside className="editor-left-panel">
-                        <nav className="editor-tabs">
-                            {activePhase === 'basics' && (
-                                <>
-                                    {renderTabButton('general', 'Genel', <Globe size={18} />)}
-                                    {renderTabButton('levels', 'Seviyeler', <Layout size={18} />)}
-                                </>
-                            )}
-                            {activePhase === 'content' && (
-                                <>
-                                    {renderTabButton('concepts', 'Kavramlar', <Database size={18} />)}
-                                    {renderTabButton('screens', 'Ekranlar', <Monitor size={18} />)}
-                                </>
-                            )}
-                            {activePhase === 'design' && (
-                                <>
-                                    {renderTabButton('visual', 'Görsel', <Palette size={18} />)}
-                                    {renderTabButton('audio', 'Ses', <Music size={18} />)}
-                                </>
-                            )}
-                            {activePhase === 'rules' && (
-                                <>
-                                    {renderTabButton('gameplay', 'Oynanış', <Zap size={18} />)}
-                                    {renderTabButton('scoring', 'Puanlama', <BarChart2 size={18} />)}
-                                    {renderTabButton('publishing', 'Yayınla', <Globe size={18} />)}
-                                </>
-                            )}
-                        </nav>
+                            <nav className={`editor-tabs ${activePhase === 'design' ? 'vertical' : ''}`}>
+                                {activePhase === 'basics' && (
+                                    <>
+                                        {renderTabButton('general', 'Genel', <Globe size={18} />)}
+                                        {renderTabButton('levels', 'Seviyeler', <Layout size={18} />)}
+                                    </>
+                                )}
+                                {activePhase === 'content' && (
+                                    <>
+                                        {renderTabButton('concepts', 'Kavramlar', <Database size={18} />)}
+                                        {renderTabButton('screens', 'Ekranlar', <Monitor size={18} />)}
+                                    </>
+                                )}
+                                {activePhase === 'design' && (
+                                    <>
+                                        {renderTabButton('visual', 'Görsel', <Palette size={18} />)}
+                                        {renderTabButton('audio', 'Ses', <Music size={18} />)}
+                                    </>
+                                )}
+                                {activePhase === 'rules' && (
+                                    <>
+                                        {renderTabButton('gameplay', 'Oynanış', <Zap size={18} />)}
+                                        {renderTabButton('scoring', 'Puanlama', <BarChart2 size={18} />)}
+                                        {renderTabButton('publishing', 'Yayınla', <Globe size={18} />)}
+                                    </>
+                                )}
+                            </nav>
 
                         <div className="tab-content">
                             {activeTab === 'general' && (
@@ -424,8 +438,12 @@ export const LevelEditor: React.FC = () => {
                                         </div>
                                     </div>
                                     
-                                    <label>Kapak Görseli URL</label>
-                                    <input value={project.thumbnail_url || ''} onChange={e => setProject({...project, thumbnail_url: e.target.value})} />
+                                    <AssetPicker 
+                                        type="background" 
+                                        label="Kapak Görseli" 
+                                        value={project.thumbnail_url || ''} 
+                                        onChange={val => setProject({...project, thumbnail_url: val})} 
+                                    />
 
                                     <label>Etiketler (Virgülle ayırın)</label>
                                     <input value={project.tags?.join(', ') || ''} onChange={e => setProject({...project, tags: e.target.value.split(',').map(s => s.trim())})} />
@@ -560,19 +578,23 @@ export const LevelEditor: React.FC = () => {
                                         onChange={val => updateCurrentLevel({ config: { ...currentLevel.config, player_image: val } })} 
                                     />
 
-                                    <label>Doğru Efekti</label>
-                                    <select value={currentLevel.effect_correct || 'sparkle'} onChange={e => updateCurrentLevel({ effect_correct: e.target.value })}>
-                                        <option value="sparkle">Parlamaz</option>
-                                        <option value="glow">Işıma</option>
-                                        <option value="pop">Büyüme</option>
-                                    </select>
+                                    <div className="settings-group">
+                                        <label>Doğru Efekti</label>
+                                        <select value={currentLevel.effect_correct || 'sparkle'} onChange={e => updateCurrentLevel({ effect_correct: e.target.value })}>
+                                            <option value="sparkle">Parlamaz</option>
+                                            <option value="glow">Işıma</option>
+                                            <option value="pop">Büyüme</option>
+                                        </select>
+                                    </div>
 
-                                    <label>Hata Efekti</label>
-                                    <select value={currentLevel.effect_wrong || 'shake'} onChange={e => updateCurrentLevel({ effect_wrong: e.target.value })}>
-                                        <option value="shake">Sarsıntı</option>
-                                        <option value="tint">Kızarma</option>
-                                        <option value="fade">Kararma</option>
-                                    </select>
+                                    <div className="settings-group">
+                                        <label>Hata Efekti</label>
+                                        <select value={currentLevel.effect_wrong || 'shake'} onChange={e => updateCurrentLevel({ effect_wrong: e.target.value })}>
+                                            <option value="shake">Sarsıntı</option>
+                                            <option value="tint">Kızarma</option>
+                                            <option value="fade">Kararma</option>
+                                        </select>
+                                    </div>
                                 </div>
                             )}
 
@@ -659,93 +681,83 @@ export const LevelEditor: React.FC = () => {
                             {activeTab === 'screens' && (
                                 <div className="screens-settings">
                                     <h3 style={{ marginBottom: '8px' }}>Oyun Ekranları - {currentLevel.title}</h3>
-                                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginBottom: '20px' }}>
-                                        Oyunun farklı aşamalarında oyuncuya gösterilecek mesajları ve görselleri ayarlayın.
-                                    </p>
-
-                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: 'var(--bg-main)', padding: '6px', borderRadius: '10px' }}>
+                                               <div className="screen-selector-tabs">
                                         {[
-                                            { id: 'cover', label: 'Kapak' },
-                                            { id: 'infoStart', label: 'Bilgi (Baş)' },
-                                            { id: 'victory', label: 'Zafer' },
-                                            { id: 'defeat', label: 'Yenilgi' },
-                                            { id: 'infoEnd', label: 'Bilgi (Son)' }
+                                            { id: 'cover', label: 'Kapak', icon: <Monitor size={18} /> },
+                                            { id: 'infoStart', label: 'Bilgi (Baş)', icon: <Info size={18} /> },
+                                            { id: 'victory', label: 'Zafer', icon: <Trophy size={18} /> },
+                                            { id: 'defeat', label: 'Yenilgi', icon: <X size={18} /> },
+                                            { id: 'infoEnd', label: 'Bilgi (Son)', icon: <Flag size={18} /> }
                                         ].map(s => (
                                             <button 
                                                 key={s.id}
                                                 onClick={() => setActiveScreen(s.id as any)}
-                                                style={{ 
-                                                    flex: 1, 
-                                                    padding: '8px', 
-                                                    borderRadius: '6px', 
-                                                    border: 'none', 
-                                                    background: activeScreen === s.id ? 'var(--primary-color)' : 'transparent',
-                                                    color: activeScreen === s.id ? 'white' : 'var(--text-secondary)',
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: '600',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s'
-                                                }}
+                                                className={`screen-tab-btn ${activeScreen === s.id ? 'active' : ''}`}
+                                                title={s.label}
                                             >
-                                                {s.label}
+                                                {s.icon}
                                             </button>
                                         ))}
-                                    </div>
+                                     </div>
 
-                                    {(currentLevel.screens?.[activeScreen]) && (
-                                        <div className="settings-group">
-                                            {(activeScreen === 'infoStart' || activeScreen === 'infoEnd') && (
-                                                <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={currentLevel.screens[activeScreen].enabled} 
-                                                        onChange={e => {
-                                                            const newScreens = { ...currentLevel.screens };
-                                                            newScreens[activeScreen].enabled = e.target.checked;
-                                                            updateCurrentLevel({ screens: newScreens });
-                                                        }}
-                                                        style={{ width: 'auto', margin: 0 }}
-                                                    />
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>Bu ekranı aktifleştir</span>
-                                                </div>
-                                            )}
+                                    {(() => {
+                                        const screens = currentLevel.screens || createDefaultScreens();
+                                        const screenData = screens[activeScreen];
+                                        if (!screenData) return null;
 
-                                            <label>Başlık</label>
-                                            <input 
-                                                value={currentLevel.screens[activeScreen].title}
-                                                onChange={e => {
-                                                    const newScreens = { ...currentLevel.screens };
-                                                    newScreens[activeScreen].title = e.target.value;
-                                                    updateCurrentLevel({ screens: newScreens });
-                                                }}
-                                            />
+                                        return (
+                                            <div className="settings-group">
+                                                {(activeScreen === 'infoStart' || activeScreen === 'infoEnd') && (
+                                                    <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={screenData.enabled} 
+                                                            onChange={e => {
+                                                                const newScreens = { ...screens };
+                                                                newScreens[activeScreen].enabled = e.target.checked;
+                                                                updateCurrentLevel({ screens: newScreens });
+                                                            }}
+                                                            style={{ width: 'auto', margin: 0 }}
+                                                        />
+                                                        <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>Bu ekranı aktifleştir</span>
+                                                    </div>
+                                                )}
 
-                                            <label>Açıklama / Mesaj</label>
-                                            <textarea 
-                                                rows={3}
-                                                value={currentLevel.screens[activeScreen].description}
-                                                onChange={e => {
-                                                    const newScreens = { ...currentLevel.screens };
-                                                    newScreens[activeScreen].description = e.target.value;
-                                                    updateCurrentLevel({ screens: newScreens });
-                                                }}
-                                            />
+                                                <label>Başlık</label>
+                                                <input 
+                                                    value={screenData.title}
+                                                    onChange={e => {
+                                                        const newScreens = { ...currentLevel.screens };
+                                                        newScreens[activeScreen].title = e.target.value;
+                                                        updateCurrentLevel({ screens: newScreens });
+                                                    }}
+                                                />
 
-                                            <label>Buton Metni</label>
-                                            <input 
-                                                value={currentLevel.screens[activeScreen].buttonText}
-                                                onChange={e => {
-                                                    const newScreens = { ...currentLevel.screens };
-                                                    newScreens[activeScreen].buttonText = e.target.value;
-                                                    updateCurrentLevel({ screens: newScreens });
-                                                }}
-                                            />
+                                                <label>Açıklama / Mesaj</label>
+                                                <textarea 
+                                                    rows={3}
+                                                    value={screenData.description}
+                                                    onChange={e => {
+                                                        const newScreens = { ...currentLevel.screens };
+                                                        newScreens[activeScreen].description = e.target.value;
+                                                        updateCurrentLevel({ screens: newScreens });
+                                                    }}
+                                                />
 
-                                            <div className="grid-2">
+                                                <label>Buton Metni</label>
+                                                <input 
+                                                    value={screenData.buttonText}
+                                                    onChange={e => {
+                                                        const newScreens = { ...currentLevel.screens };
+                                                        newScreens[activeScreen].buttonText = e.target.value;
+                                                        updateCurrentLevel({ screens: newScreens });
+                                                    }}
+                                                />
+
                                                 <AssetPicker 
                                                     type="background" 
                                                     label="Özel Arka Plan" 
-                                                    value={currentLevel.screens[activeScreen].background || ''} 
+                                                    value={screenData.background || ''} 
                                                     onChange={val => {
                                                         const newScreens = { ...currentLevel.screens };
                                                         newScreens[activeScreen].background = val;
@@ -755,7 +767,7 @@ export const LevelEditor: React.FC = () => {
                                                 <AssetPicker 
                                                     type="music" 
                                                     label="Özel Müzik" 
-                                                    value={currentLevel.screens[activeScreen].music || ''} 
+                                                    value={screenData.music || ''} 
                                                     onChange={val => {
                                                         const newScreens = { ...currentLevel.screens };
                                                         newScreens[activeScreen].music = val;
@@ -763,8 +775,9 @@ export const LevelEditor: React.FC = () => {
                                                     }} 
                                                 />
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
+
                                 </div>
                             )}
                         </div>
@@ -774,26 +787,53 @@ export const LevelEditor: React.FC = () => {
                     <main className="editor-center-panel">
                         <div className="preview-container">
                             <div className="preview-toolbar">
-                                <span>CANLI ÖNİZLEME: {currentLevel.title}</span>
+                                <span>Canlı Önizleme: {currentLevel.title}</span>
                                 <button onClick={() => { setTestMode('single'); setIsTesting(true); }}>
                                     <Play size={14} /> Seviyeyi Dene
                                 </button>
                             </div>
                             <div className="phaser-preview-placeholder">
-                                {/* Real Phaser Game would go here for live preview */}
-                                <div className="bg-preview" style={{ background: `url(/assets/bg.png) center/cover` }}>
-                                    <div className="preview-ui">
-                                        <div className="score">Skor: 0</div>
-                                        <div className="timer">{Math.floor(currentLevel.duration / 60)}:{(currentLevel.duration % 60).toString().padStart(2, '0')}</div>
+                                {activeTab === 'screens' ? (
+                                    <div className="screen-preview-container" style={{ 
+                                        background: (currentLevel.screens?.[activeScreen]?.background || currentLevel.background) ? `url(${currentLevel.screens?.[activeScreen]?.background || currentLevel.background}) center/cover` : 'var(--bg-main)',
+                                        opacity: (activeScreen === 'infoStart' || activeScreen === 'infoEnd') && !currentLevel.screens?.[activeScreen]?.enabled ? 0.5 : 1
+                                    }}>
+                                        <div className="screen-mockup-overlay">
+                                            <div className="screen-content">
+                                                <h1>{currentLevel.screens?.[activeScreen]?.title || 'Başlık Yok'}</h1>
+                                                <p>{currentLevel.screens?.[activeScreen]?.description || 'Açıklama girilmemiş.'}</p>
+                                                <button className="preview-game-btn">
+                                                    {currentLevel.screens?.[activeScreen]?.buttonText || 'Devam Et'}
+                                                </button>
+                                            </div>
+                                            {(activeScreen === 'infoStart' || activeScreen === 'infoEnd') && !currentLevel.screens?.[activeScreen]?.enabled && (
+                                                <div className="disabled-badge">Bu ekran kapalı</div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="instruction">{currentLevel.instruction}</div>
-                                    <div className="objects-preview">
-                                        {currentLevel.correct_concepts.slice(0, 2).map((c, i) => (
-                                            <div key={i} className="falling-item">{c.text}</div>
-                                        ))}
+                                ) : (
+                                    <div className="bg-preview" style={{ 
+                                        background: currentLevel.background ? `url(${currentLevel.background}) center/cover` : 'var(--bg-main)',
+                                        position: 'relative'
+                                    }}>
+                                        <div className="preview-ui">
+                                            <div className="score">Skor: 0</div>
+                                            <div className="timer">{Math.floor(currentLevel.duration / 60)}:{(currentLevel.duration % 60).toString().padStart(2, '0')}</div>
+                                        </div>
+                                        <div className="instruction" style={{ top: '60px' }}>{currentLevel.instruction}</div>
+                                        <div className="objects-preview">
+                                            {currentLevel.correct_concepts.slice(0, 2).map((c, i) => (
+                                                <div key={i} className="falling-item" style={{ top: `${120 + i * 60}px`, left: `${100 + i * 150}px` }}>{c.text}</div>
+                                            ))}
+                                        </div>
+                                        <div className="player-preview" style={{ 
+                                            background: currentLevel.config.player_image ? `url(${currentLevel.config.player_image}) center/contain no-repeat` : 'white',
+                                            width: '60px',
+                                            height: '60px',
+                                            bottom: '20px'
+                                        }}></div>
                                     </div>
-                                    <div className="player-preview"></div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </main>
@@ -850,8 +890,8 @@ export const LevelEditor: React.FC = () => {
 
                 /* Slim Header Styles */
                 .editor-header {
-                    height: 56px;
-                    padding: 0 24px;
+                    height: 40px;
+                    padding: 0 12px;
                     background: var(--bg-surface);
                     border-bottom: 1px solid var(--border-color);
                     display: flex;
@@ -861,7 +901,7 @@ export const LevelEditor: React.FC = () => {
                     z-index: 100;
                 }
 
-                .header-left { display: flex; align-items: center; gap: 40px; }
+                .header-left { display: flex; align-items: center; gap: 20px; }
                 
                 .project-meta { display: flex; align-items: center; gap: 12px; }
                 .project-meta h1 { 
@@ -884,11 +924,11 @@ export const LevelEditor: React.FC = () => {
 
                 .phase-nav { display: flex; gap: 4px; }
                 .phase-btn {
-                    padding: 8px 16px;
+                    padding: 4px 12px;
                     border: none;
                     background: transparent;
                     color: var(--text-secondary);
-                    font-size: 0.85rem;
+                    font-size: 0.8rem;
                     font-weight: 600;
                     cursor: pointer;
                     border-radius: 8px;
@@ -897,13 +937,13 @@ export const LevelEditor: React.FC = () => {
                 .phase-btn:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
                 .phase-btn.active { background: var(--bg-main); color: var(--primary-color); }
 
-                .header-actions { display: flex; align-items: center; gap: 12px; }
+                .header-actions { display: flex; align-items: center; gap: 8px; }
                 .btn-icon {
                     background: transparent;
                     border: 1px solid var(--border-color);
                     color: var(--text-secondary);
-                    width: 36px;
-                    height: 36px;
+                    width: 32px;
+                    height: 32px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -918,9 +958,9 @@ export const LevelEditor: React.FC = () => {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    padding: 8px 16px;
+                    padding: 4px 12px;
                     border-radius: 8px;
-                    font-size: 0.85rem;
+                    font-size: 0.8rem;
                     font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
@@ -937,7 +977,7 @@ export const LevelEditor: React.FC = () => {
 
                 /* Sidebar Styles */
                 .editor-left-panel {
-                    width: 280px;
+                    width: 260px;
                     border-right: 1px solid var(--border-color);
                     background: var(--bg-surface);
                     display: flex;
@@ -945,34 +985,76 @@ export const LevelEditor: React.FC = () => {
                 }
 
                 .editor-tabs {
-                    padding: 12px;
+                    margin: 8px 8px 4px 8px;
+                    padding: 2px;
                     display: flex;
-                    flex-direction: column;
+                    flex-direction: row;
+                    background: var(--bg-input);
+                    border-radius: 10px;
                     gap: 4px;
-                    border-bottom: 1px solid var(--border-color);
+                    border: 1px solid var(--border-color);
+                    overflow-x: auto;
+                    scrollbar-width: none;
+                    -ms-overflow-style: none;
+                    position: relative;
                 }
 
+                .editor-tabs::-webkit-scrollbar {
+                    display: none;
+                }
+
+                .editor-tabs::after {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    right: 0;
+                    width: 30px;
+                    height: 100%;
+                    background: linear-gradient(to left, var(--bg-input), transparent);
+                    pointer-events: none;
+                    border-radius: 0 10px 10px 0;
+                    opacity: 0.8;
+                }
+                .editor-tabs.vertical {
+                    flex-direction: column;
+                    height: auto;
+                    padding: 4px;
+                    gap: 2px;
+                }
+                .editor-tabs.vertical .editor-tab-btn {
+                    padding: 8px 12px;
+                    justify-content: flex-start;
+                }
+                .editor-tabs.vertical .editor-tab-btn span {
+                    font-size: 0.8rem;
+                }
                 .editor-tab-btn {
+                    flex: 1;
                     display: flex;
                     align-items: center;
-                    gap: 12px;
-                    padding: 10px 12px;
+                    justify-content: center;
+                    gap: 6px;
+                    padding: 6px 4px;
                     border: none;
                     background: transparent;
                     color: var(--text-secondary);
                     cursor: pointer;
-                    border-radius: 8px;
-                    transition: all 0.2s;
-                    text-align: left;
+                    border-radius: 7px;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    text-align: center;
+                    white-space: nowrap;
                 }
 
                 .editor-tab-btn.active {
-                    background: rgba(var(--primary-rgb), 0.1);
+                    background: var(--bg-surface);
                     color: var(--primary-color);
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                    font-weight: 700;
                 }
                 
                 .editor-tab-btn:hover:not(.active) {
-                    background: rgba(0,0,0,0.03);
+                    background: rgba(0,0,0,0.04);
+                    color: var(--text-primary);
                 }
 
                 .editor-tab-btn .icon-wrapper {
@@ -983,23 +1065,24 @@ export const LevelEditor: React.FC = () => {
                     justify-content: center;
                 }
 
-                .editor-tab-btn span { font-size: 0.85rem; font-weight: 500; }
+                .editor-tab-btn span { font-size: 0.75rem; font-weight: 500; }
 
                 .tab-content { 
                     flex: 1; 
-                    padding: 20px; 
+                    padding: 12px 16px; 
                     overflow-y: auto; 
                 }
 
-                .tab-content h3 { margin-top: 0; margin-bottom: 24px; font-size: 1.1rem; font-weight: 700; }
+                .tab-content h3 { margin-top: 0; margin-bottom: 8px; font-size: 0.9rem; font-weight: 700; }
 
-                .settings-group label { display: block; font-size: 0.8rem; margin-bottom: 6px; color: var(--text-secondary); }
-                .settings-group input, .settings-group textarea {
-                    width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 8px;
+                .settings-group label { display: block; font-size: 0.7rem; margin-bottom: 2px; color: var(--text-secondary); }
+                .settings-group input, .settings-group textarea, .settings-group select {
+                    width: 100%; padding: 6px; margin-bottom: 8px; border-radius: 6px;
                     border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);
+                    font-size: 0.8rem;
                 }
 
-                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
                 .levels-manager .btn-add-level {
                     width: 100%; padding: 12px; border-radius: 8px; border: 2px dashed var(--border-color);
@@ -1007,33 +1090,64 @@ export const LevelEditor: React.FC = () => {
                 }
 
                 .level-item {
-                    display: flex; align-items: center; padding: 12px; border-radius: 10px;
-                    background: var(--bg-main); border: 1px solid var(--border-color); margin-bottom: 8px;
+                    display: flex; align-items: center; padding: 8px; border-radius: 10px;
+                    background: var(--bg-main); border: 1px solid var(--border-color); margin-bottom: 4px;
                     cursor: pointer; transition: all 0.2s;
                 }
 
                 .level-item.selected { border-color: var(--primary-color); background: rgba(var(--primary-rgb), 0.05); }
-                .level-item .idx { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: var(--bg-surface); border-radius: 50%; font-size: 0.7rem; margin-right: 12px; }
+                .level-item .idx { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--bg-surface); border-radius: 50%; font-size: 0.65rem; margin-right: 8px; }
                 .level-item .details { flex: 1; }
-                .level-item .details strong { display: block; font-size: 0.9rem; }
+                .level-item .details strong { display: block; font-size: 0.85rem; }
                 .level-item .details span { font-size: 0.7rem; color: var(--text-secondary); }
                 .level-item .actions { display: flex; gap: 4px; opacity: 0; }
                 .level-item:hover .actions { opacity: 1; }
                 .level-item .actions button { border: none; background: transparent; padding: 4px; color: var(--text-secondary); cursor: pointer; }
                 .level-item .actions button.delete:hover { color: #ef4444; }
 
-                .concept-section { margin-bottom: 24px; }
-                .concept-section h4 { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; }
-                .concept-row { display: flex; gap: 8px; margin-bottom: 8px; }
+                .concept-section { margin-bottom: 12px; }
+                .concept-section h4 { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 8px; }
+                .concept-row { display: flex; gap: 4px; margin-bottom: 4px; }
                 .concept-row input { flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); }
                 .concept-row button { border: none; background: transparent; color: var(--text-secondary); cursor: pointer; }
 
-                .slider-input { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-                .slider-input input[type="range"] { flex: 1; }
-                .slider-input input[type="number"] { width: 60px; padding: 4px; text-align: center; }
+                .screen-selector-tabs {
+                    display: flex; flex-direction: row; gap: 4px; margin-bottom: 12px; background: var(--bg-input); padding: 4px; border-radius: 12px; border: 1px solid var(--border-color);
+                    overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+                }
+                .screen-selector-tabs::-webkit-scrollbar { display: none; }
+                .screen-tab-btn {
+                    flex: 1; min-width: 36px; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 8px; border: none; background: transparent; color: var(--text-secondary);
+                    cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                .screen-tab-btn.active {
+                    background: var(--bg-surface); color: var(--primary-color); box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px);
+                }
+                .screen-tab-btn:hover:not(.active) {
+                    background: rgba(0,0,0,0.05); color: var(--text-primary);
+                }
 
-                .editor-center-panel { flex: 1; background: var(--bg-main); padding: 40px; overflow: hidden; display: flex; flex-direction: column; }
-                .preview-container { flex: 1; background: var(--bg-surface); border-radius: 16px; border: 1px solid var(--border-color); display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+                .screen-preview-container {
+                    width: 100%; height: 100%; border-radius: 8px; position: relative; overflow: hidden;
+                    display: flex; align-items: center; justify-content: center;
+                }
+                .screen-mockup-overlay {
+                    width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; flex-direction: column;
+                    align-items: center; justify-content: center; text-align: center; color: white; padding: 40px;
+                }
+                .screen-content h1 { font-size: 2.5rem; margin-bottom: 16px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+                .screen-content p { font-size: 1.1rem; margin-bottom: 32px; max-width: 500px; line-height: 1.6; text-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+                .preview-game-btn {
+                    padding: 12px 32px; background: var(--primary-color); border: none; border-radius: 30px;
+                    color: white; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.4);
+                }
+                .disabled-badge {
+                    position: absolute; top: 20px; right: 20px; background: #ef4444; color: white;
+                    padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 800;
+                }
+
+                .editor-center-panel { flex: 1; background: var(--bg-main); padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
+                .preview-container { flex: 1; background: var(--bg-surface); border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
                 .preview-toolbar { padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: bold; }
                 .preview-toolbar button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer; display: flex; align-items: center; gap: 6px; }
 
@@ -1049,9 +1163,9 @@ export const LevelEditor: React.FC = () => {
                 .falling-item { padding: 8px 16px; background: white; border-radius: 20px; color: #333; font-weight: bold; font-size: 0.8rem; position: absolute; top: 120px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
                 .player-preview { width: 100px; height: 20px; background: white; border-radius: 10px; position: absolute; bottom: 10px; }
 
-                .editor-right-panel { width: 260px; border-left: 1px solid var(--border-color); background: var(--bg-surface); padding: 20px; }
-                .panel-header { font-weight: bold; font-size: 0.9rem; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
-                .summary-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px; }
+                .editor-right-panel { width: 200px; border-left: 1px solid var(--border-color); background: var(--bg-surface); padding: 12px; }
+                .panel-header { font-weight: bold; font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+                .summary-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
                 .summary-item { font-size: 0.8rem; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; }
                 .summary-item.success { color: #10b981; background: rgba(16, 185, 129, 0.1); }
                 .summary-item.warning { color: #f59e0b; background: rgba(245, 158, 11, 0.1); }

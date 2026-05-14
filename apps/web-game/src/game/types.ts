@@ -22,6 +22,23 @@ export interface GameProjectData {
     settings: CommonSettings;
 }
 
+export interface ScreenConfig {
+    title: string;
+    description: string;
+    buttonText: string;
+    background?: string;
+    music?: string;
+    enabled?: boolean;
+}
+
+export interface LevelScreens {
+    cover: ScreenConfig;
+    victory: ScreenConfig;
+    defeat: ScreenConfig;
+    infoStart: ScreenConfig;
+    infoEnd: ScreenConfig;
+}
+
 export interface LevelData {
     id: string;
     title: string;
@@ -39,6 +56,7 @@ export interface LevelData {
     success_percentage: number;
     max_errors?: number;
     config: LevelConfig;
+    screens?: LevelScreens;
 }
 
 export interface TargetData {

@@ -40,6 +40,13 @@ export class Preload extends Phaser.Scene {
     }
 
     create() {
-        this.scene.start('MainMenu');
+        const isTestMode = this.registry.get('isTestMode');
+        const projectData = this.registry.get('projectData') || this.registry.get('levelData');
+
+        if (isTestMode || projectData) {
+            this.scene.start('Game');
+        } else {
+            this.scene.start('MainMenu');
+        }
     }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { GameContainer } from '../components/game/GameContainer';
-import { Play as PlayIcon, Info, Trophy, Edit2 } from 'lucide-react';
+import { Play as PlayIcon, Info, Trophy, Edit2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Play: React.FC = () => {
@@ -26,6 +26,36 @@ export const Play: React.FC = () => {
     const handleEdit = (e: React.MouseEvent, level: any) => {
         e.stopPropagation();
         navigate('/editor', { state: { projectToLoad: level } });
+    };
+
+    const handleDelete = async (e: React.MouseEvent, level: any) => {
+        e.stopPropagation();
+        if (!window.confirm(`"${level.title}" oyununu silmek istediğinize emin misiniz?`)) return;
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            alert('Bu işlem için giriş yapmalısınız.');
+            return;
+        }
+
+        try {
+            const res = await fetch(`http://localhost:8000/levels/${level.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (res.ok) {
+                setLevels(levels.filter(l => l.id !== level.id));
+            } else {
+                const error = await res.json();
+                alert(`Hata: ${error.detail || 'Silme işlemi başarısız'}`);
+            }
+        } catch (err) {
+            console.error('Delete error:', err);
+            alert('Sunucuyla iletişim kurulurken bir hata oluştu.');
+        }
     };
 
     if (selectedLevel) {
@@ -115,30 +145,52 @@ export const Play: React.FC = () => {
                                         {lvl.game_type?.toUpperCase() || 'CATCH'}
                                     </div>
 
-                                    {/* Edit Button Overly */}
-                                    <button 
-                                        onClick={(e) => handleEdit(e, lvl)}
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '12px',
-                                            right: '12px',
-                                            background: 'var(--primary-color)',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            padding: '8px 12px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '6px',
-                                            fontSize: '0.8rem',
-                                            fontWeight: '600',
-                                            cursor: 'pointer',
-                                            boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                                            zIndex: 10
-                                        }}
-                                    >
-                                        <Edit2 size={14} /> Düzenle
-                                    </button>
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '12px',
+                                        right: '12px',
+                                        display: 'flex',
+                                        gap: '8px',
+                                        zIndex: 10
+                                    }}>
+                                        <button 
+                                            onClick={(e) => handleEdit(e, lvl)}
+                                            style={{
+                                                background: 'var(--primary-color)',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '8px 12px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                            }}
+                                        >
+                                            <Edit2 size={14} /> Düzenle
+                                        </button>
+                                        <button 
+                                            onClick={(e) => handleDelete(e, lvl)}
+                                            style={{
+                                                background: '#ef4444',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '8px',
+                                                padding: '8px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                            }}
+                                            title="Sil"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div style={{ padding: '20px' }}>
                                     <h3 style={{ margin: '0 0 8px 0' }}>{lvl.title}</h3>

@@ -294,6 +294,22 @@ def update_level(
     db.refresh(db_level)
     return db_level
 
+@app.delete("/levels/{level_id}")
+def delete_level(
+    level_id: int, 
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_level = db.query(models.Level).filter(models.Level.id == level_id).first()
+    if not db_level:
+        raise HTTPException(status_code=404, detail="Level not found")
+    if db_level.creator_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to delete this level")
+    
+    db.delete(db_level)
+    db.commit()
+    return {"message": "Level deleted successfully"}
+
 # --- Attempt Endpoints ---
 
 @app.post("/attempts", response_model=schemas.GameAttempt)
