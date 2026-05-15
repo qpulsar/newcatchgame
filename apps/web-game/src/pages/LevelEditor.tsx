@@ -286,7 +286,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
                 config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220 },
-                screens: createDefaultScreens()
+                screens: createLevelScreens()
             },
             {
                 id: crypto.randomUUID(),
@@ -308,7 +308,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
                 config: { spawnRate: 1300, gravityY: 400, playerSpeed: 600, itemSpeed: 240 },
-                screens: createDefaultScreens()
+                screens: createLevelScreens()
             },
             {
                 id: crypto.randomUUID(),
@@ -330,7 +330,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 70, success_percentage: 70,
                 config: { spawnRate: 1200, gravityY: 450, playerSpeed: 600, itemSpeed: 260 },
-                screens: createDefaultScreens()
+                screens: createLevelScreens()
             }
         ];
         
