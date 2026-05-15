@@ -1,30 +1,37 @@
 #!/bin/bash
 
-# EduGame Deployment Script
-# This script builds the frontend and copies it to the production directory.
+# EduGame Docker Deployment Script
+# This script builds and starts the application using Docker Compose.
 
 set -e
 
-echo "Starting frontend build process..."
+echo "Starting Docker deployment process..."
 
-# Navigate to frontend directory
-cd apps/web-game
+# Ensure we are in the project root
+if [ ! -f "docker-compose.yml" ]; then
+    echo "Error: 'docker-compose.yml' not found. Please run this script from the project root."
+    exit 1
+fi
 
-# Install dependencies if necessary
-# npm install
+# Check for .env file, create from example if missing
+if [ ! -f ".env" ]; then
+    echo "Warning: .env file not found. Creating from .env.example..."
+    cp .env.example .env
+    echo "IMPORTANT: Please edit the .env file with your production settings."
+fi
 
-# Build the project
-npm run build
+# Build and start the containers
+echo "Stopping existing containers..."
+docker-compose down
 
-echo "Build successful. Copying files to production directory..."
+echo "Building and starting containers in detached mode..."
+docker-compose up --build -d
 
-# Target directory
-TARGET_DIR="/home/korkusuz/domains/edugame.korkusuz.gen.tr/public_html"
-
-# Ensure the target directory exists
-mkdir -p "$TARGET_DIR"
-
-# Copy the contents of the dist folder to the target directory
-cp -r dist/* "$TARGET_DIR"
-
-echo "Deployment completed successfully! Frontend is now in $TARGET_DIR"
+echo "---------------------------------------------------"
+echo "Deployment successful!"
+echo "Backend is running on: http://localhost:8000"
+echo "Frontend is running on: http://localhost:8080"
+echo "---------------------------------------------------"
+echo "NOTE: Remember to configure your host's Nginx/Apache"
+echo "to reverse proxy edugame.korkusuz.gen.tr to port 8080."
+echo "---------------------------------------------------"
