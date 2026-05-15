@@ -24,9 +24,9 @@ export interface GameProjectData {
 }
 
 export interface ScreenConfig {
-    title: string;
-    description: string;
-    buttonText: string;
+    title?: string;
+    description?: string;
+    buttonText?: string;
     background?: string;
     music?: string;
     enabled?: boolean;

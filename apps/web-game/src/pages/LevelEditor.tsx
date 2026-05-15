@@ -111,7 +111,7 @@ export const LevelEditor: React.FC = () => {
             }
             
             // Cleanup: remove global screens from level if they exist
-            if ('cover' in lvl.screens || 'victory' in lvl.screens || 'defeat' in lvl.screens) {
+            if (lvl.screens && ('cover' in lvl.screens || 'victory' in lvl.screens || 'defeat' in lvl.screens)) {
                 projectUpdated = true;
                 return {
                     ...lvl,
