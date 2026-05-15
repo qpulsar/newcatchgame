@@ -16,7 +16,7 @@ export class TargetBox extends Phaser.GameObjects.Container {
         this.label = scene.add.text(0, height / 2 + 20, category, {
             fontSize: '18px',
             color: '#' + color.toString(16).padStart(6, '0'),
-            fontWeight: 'bold'
+            fontStyle: 'bold'
         }).setOrigin(0.5);
 
         this.add([this.background, this.label]);

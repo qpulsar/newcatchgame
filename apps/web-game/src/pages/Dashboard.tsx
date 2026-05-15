@@ -6,8 +6,8 @@ import { Trophy, Gamepad2, Calendar, Award } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
     const { t } = useTranslation();
-    const [badges, setBadges] = useState([]);
-    const [recentAttempts, setRecentAttempts] = useState([]);
+    const [badges, setBadges] = useState<any[]>([]);
+    const [recentAttempts, setRecentAttempts] = useState<any[]>([]);
     const [stats, setStats] = useState({
         totalScore: 0,
         gamesPlayed: 0,

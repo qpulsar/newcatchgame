@@ -20,6 +20,7 @@ export interface GameProject {
 export interface GameProjectData {
     levels: LevelData[];
     settings: CommonSettings;
+    common_screens?: LevelScreens;
 }
 
 export interface ScreenConfig {
@@ -32,11 +33,11 @@ export interface ScreenConfig {
 }
 
 export interface LevelScreens {
-    cover: ScreenConfig;
-    victory: ScreenConfig;
-    defeat: ScreenConfig;
-    infoStart: ScreenConfig;
-    infoEnd: ScreenConfig;
+    cover?: ScreenConfig;
+    victory?: ScreenConfig;
+    defeat?: ScreenConfig;
+    infoStart?: ScreenConfig;
+    infoEnd?: ScreenConfig;
 }
 
 export interface LevelData {
@@ -89,6 +90,10 @@ export interface LevelConfig {
     rotation_speed?: number;
     canvas_ratio?: '4:3' | '16:9' | 'custom';
     player_image?: string;
+    sound_correct?: string;
+    sound_wrong?: string;
+    points_correct?: number;
+    points_wrong?: number;
 }
 
 export interface CommonSettings {

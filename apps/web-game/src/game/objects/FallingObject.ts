@@ -17,7 +17,7 @@ export class FallingObject extends Phaser.GameObjects.Container {
         this.label = scene.add.text(0, 0, text, {
             fontSize: '18px',
             color: '#333333',
-            fontWeight: 'bold',
+            fontStyle: 'bold',
             padding: { x: 12, y: 8 }
         }).setOrigin(0.5);
 

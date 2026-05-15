@@ -100,9 +100,9 @@ export class Game extends Phaser.Scene {
         uiPanel.fillRect(0, 0, width, 60);
 
         // UI Texts
-        this.scoreText = this.add.text(20, 15, `Skor: ${this.totalScore}`, { fontSize: '24px', color: '#fff', fontWeight: 'bold' });
-        this.levelText = this.add.text(width / 2, 15, `Seviye: ${this.currentLevelIndex + 1}/${this.projectData.data.levels.length}`, { fontSize: '24px', color: '#fff', fontWeight: 'bold' }).setOrigin(0.5, 0);
-        this.timerText = this.add.text(width - 20, 15, 'Süre: 00', { fontSize: '24px', color: '#fff', fontWeight: 'bold' }).setOrigin(1, 0);
+        this.scoreText = this.add.text(20, 15, `Skor: ${this.totalScore}`, { fontSize: '24px', color: '#fff', fontStyle: 'bold' });
+        this.levelText = this.add.text(width / 2, 15, `Seviye: ${this.currentLevelIndex + 1}/${this.projectData.data.levels.length}`, { fontSize: '24px', color: '#fff', fontStyle: 'bold' }).setOrigin(0.5, 0);
+        this.timerText = this.add.text(width - 20, 15, 'Süre: 00', { fontSize: '24px', color: '#fff', fontStyle: 'bold' }).setOrigin(1, 0);
         
         this.infoText = this.add.text(width / 2, 80, this.currentLevelData.instruction || '', { 
             fontSize: '20px', 
@@ -114,7 +114,7 @@ export class Game extends Phaser.Scene {
         this.errorText = this.add.text(width / 2, 120, '', { 
             fontSize: '18px', 
             color: '#ff4444', 
-            fontWeight: 'bold' 
+            fontStyle: 'bold' 
         }).setOrigin(0.5);
 
         this.maxErrors = this.currentLevelData.max_errors || 3;
@@ -281,7 +281,7 @@ export class Game extends Phaser.Scene {
 
         // Content
         const title = this.add.text(width / 2, height / 3, config.title, {
-            fontSize: '48px', color: '#ffffff', fontWeight: 'bold', align: 'center', wordWrap: { width: width * 0.8 },
+            fontSize: '48px', color: '#ffffff', fontStyle: 'bold', align: 'center', wordWrap: { width: width * 0.8 },
             stroke: '#000', strokeThickness: 6
         }).setOrigin(0.5);
         
@@ -292,7 +292,7 @@ export class Game extends Phaser.Scene {
 
         const btn = this.add.text(width / 2, height * 0.75, config.buttonText || 'Devam Et', {
             fontSize: '28px', color: '#ffffff', backgroundColor: '#6366f1', padding: { x: 30, y: 15 },
-            fontFamily: 'Arial', fontWeight: 'bold'
+            fontFamily: 'Arial', fontStyle: 'bold'
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true })
@@ -404,7 +404,7 @@ export class Game extends Phaser.Scene {
         const feedback = this.add.text(this.player.x, this.player.y - 100, text, {
             fontSize: '24px',
             color: '#' + color.toString(16).padStart(6, '0'),
-            fontWeight: 'bold',
+            fontStyle: 'bold',
             stroke: '#000',
             strokeThickness: 4
         }).setOrigin(0.5);

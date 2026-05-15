@@ -139,7 +139,7 @@ export const LevelEditor: React.FC = () => {
 
     const [activeTab, setActiveTab] = useState<EditorTab>('basics');
     const [activePhase, setActivePhase] = useState<EditorPhase>('basics');
-    const [activeScreen, setActiveScreen] = useState<'cover' | 'victory' | 'defeat' | 'infoStart' | 'infoEnd' | null>('cover');
+    const [activeScreen, setActiveScreen] = useState<'cover' | 'victory' | 'defeat' | 'infoStart' | 'infoEnd' | 'gameplay' | null>('cover');
     const [selectedLevelIndex, setSelectedLevelIndex] = useState(0);
     const [isTesting, setIsTesting] = useState(false);
     const [showSummary, setShowSummary] = useState(true);
@@ -258,6 +258,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 50, success_percentage: 70,
                 config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200 },
+                targets: [],
                 screens: {
                     cover: { title: 'Temel Büyüklükler', description: 'Yalnızca temel büyüklükleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
                     victory: { title: 'Tebrikler!', description: 'Temel büyüklükleri başarıyla kavradın.', buttonText: 'Sıradaki Seviye' },
@@ -286,6 +287,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
                 config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220 },
+                targets: [],
                 screens: createLevelScreens()
             },
             {
@@ -308,6 +310,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 60, success_percentage: 70,
                 config: { spawnRate: 1300, gravityY: 400, playerSpeed: 600, itemSpeed: 240 },
+                targets: [],
                 screens: createLevelScreens()
             },
             {
@@ -330,6 +333,7 @@ export const LevelEditor: React.FC = () => {
                 ],
                 duration: 60, target_score: 70, success_percentage: 70,
                 config: { spawnRate: 1200, gravityY: 450, playerSpeed: 600, itemSpeed: 260 },
+                targets: [],
                 screens: createLevelScreens()
             }
         ];
