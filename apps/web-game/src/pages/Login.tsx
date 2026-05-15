@@ -19,7 +19,7 @@ export const Login: React.FC = () => {
     formData.append('password', password);
 
     try {
-      const response = await fetch('http://localhost:8000/login', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',

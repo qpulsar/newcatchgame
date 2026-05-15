@@ -11,6 +11,9 @@ import uuid
 import logging
 
 import models, schemas, auth, database
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Loglama yapılandırması
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +78,8 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5174",
+    "https://edugame.korkusuz.gen.tr",
+    "http://edugame.korkusuz.gen.tr",
 ]
 
 app.add_middleware(
@@ -420,7 +425,8 @@ async def upload_asset(
         shutil.copyfileobj(file.file, buffer)
     
     # Veritabanına kaydet
-    asset_url = f"http://localhost:8000/uploads/{unique_filename}"
+    base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+    asset_url = f"{base_url}/uploads/{unique_filename}"
     db_asset = models.Asset(
         name=name,
         type=type,

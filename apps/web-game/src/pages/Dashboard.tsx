@@ -19,7 +19,7 @@ export const Dashboard: React.FC = () => {
         if (!token) return;
 
         // Rozetleri getir
-        fetch('http://localhost:8000/users/me/badges', {
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/me/badges`, {
             headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => {

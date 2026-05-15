@@ -376,7 +376,7 @@ export class Game extends Phaser.Scene {
         const token = localStorage.getItem('token');
         if (token && !this.isTestMode && this.projectData.id) {
             try {
-                await fetch('http://localhost:8000/attempts', {
+                await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/attempts`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

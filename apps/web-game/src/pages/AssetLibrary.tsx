@@ -62,7 +62,7 @@ export const AssetLibrary: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await fetch('http://localhost:8000/assets');
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/assets`);
       if (response.ok) {
         const data = await response.json();
         setAssets(data);
@@ -89,7 +89,7 @@ export const AssetLibrary: React.FC = () => {
     data.append('type', assetFormData.type);
 
     try {
-      const response = await fetch('http://localhost:8000/assets/upload', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/assets/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -111,7 +111,7 @@ export const AssetLibrary: React.FC = () => {
     if (!window.confirm('Bu varlığı silmek istediğinize emin misiniz?')) return;
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`http://localhost:8000/assets/${assetId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/assets/${assetId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

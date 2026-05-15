@@ -11,7 +11,7 @@ export const Play: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:8000/levels')
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels`)
             .then(res => res.json())
             .then(data => {
                 setLevels(data);
@@ -39,7 +39,7 @@ export const Play: React.FC = () => {
         }
 
         try {
-            const res = await fetch(`http://localhost:8000/levels/${level.id}`, {
+            const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels/${level.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -219,7 +219,7 @@ const Leaderboard: React.FC<{ levelId: number }> = ({ levelId }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch(`http://localhost:8000/leaderboard/${levelId}`)
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/leaderboard/${levelId}`)
             .then(res => res.json())
             .then(data => {
                 setData(data);

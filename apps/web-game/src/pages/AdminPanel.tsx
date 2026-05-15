@@ -30,7 +30,7 @@ export const AdminPanel: React.FC = () => {
   const fetchUsers = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch('http://localhost:8000/users', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
@@ -75,8 +75,8 @@ export const AdminPanel: React.FC = () => {
     e.preventDefault();
     const token = localStorage.getItem('token');
     const url = editingUser 
-      ? `http://localhost:8000/users/${editingUser.id}` 
-      : 'http://localhost:8000/users';
+      ? `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/${editingUser.id}` 
+      : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users`;
     const method = editingUser ? 'PUT' : 'POST';
 
     try {
@@ -106,7 +106,7 @@ export const AdminPanel: React.FC = () => {
     
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`http://localhost:8000/users/${userId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

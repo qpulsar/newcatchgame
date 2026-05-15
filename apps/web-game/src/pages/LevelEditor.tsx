@@ -151,7 +151,7 @@ export const LevelEditor: React.FC = () => {
 
     // --- Fetch Assets ---
     useEffect(() => {
-        fetch('http://localhost:8000/assets')
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/assets`)
             .then(res => res.json())
             .then(data => setLibraryAssets(data))
             .catch(err => console.error('Error fetching assets:', err));
@@ -352,7 +352,7 @@ export const LevelEditor: React.FC = () => {
 
         try {
             const method = project.id ? 'PUT' : 'POST';
-            const url = project.id ? `http://localhost:8000/levels/${project.id}` : 'http://localhost:8000/levels';
+            const url = project.id ? `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels/${project.id}` : `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels`;
             
             const response = await fetch(url, {
                 method,
