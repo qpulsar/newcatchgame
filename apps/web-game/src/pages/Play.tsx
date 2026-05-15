@@ -79,8 +79,8 @@ export const Play: React.FC = () => {
                             </h3>
                             <p>{selectedLevel.description}</p>
                             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                                <div>Spawn Hızı: {selectedLevel.data.config.spawnRate}ms</div>
-                                <div>Kazanma Skoru: {selectedLevel.data.config.winScore}</div>
+                                <div>Seviye Sayısı: {selectedLevel.data.levels.length}</div>
+                                <div>İlk Seviye Hedefi: {selectedLevel.data.levels[0]?.target_score || 50} Puan</div>
                             </div>
                         </div>
 
