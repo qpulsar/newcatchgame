@@ -334,3 +334,39 @@
 .game-type-card:hover .arrow {
   transform: translateX(5px);
 }
+
+/* ---------------- Animations & Loaders ---------------- */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(var(--bg-surface-rgb), 0.7);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+.loading-text {
+  margin-top: 12px;
+  font-weight: 600;
+  color: var(--primary-color);
+}

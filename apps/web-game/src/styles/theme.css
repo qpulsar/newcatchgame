@@ -17,6 +17,9 @@
   --accent-color: #f97316;  /* Turuncu */
   --success-color: #10b981;
   --error-color: #ef4444;
+  
+  --bg-surface-rgb: 255, 255, 255;
+  --primary-rgb: 99, 102, 241;
 }
 
 [data-theme="dark"] {
@@ -36,6 +39,9 @@
   --accent-color: #ff8a00;  /* Tasarımdaki Turuncu */
   --success-color: #00d26a; /* Yeşil aktif noktası */
   --error-color: #ff3b3b;
+
+  --bg-surface-rgb: 30, 32, 40;
+  --primary-rgb: 123, 77, 255;
 }
 
 /* Genel Sınıflar (Utility Classes) */

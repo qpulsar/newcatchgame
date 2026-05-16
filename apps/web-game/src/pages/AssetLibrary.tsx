@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { Bug, Plus, Trash2, X, Activity, Search, Play, Square } from 'lucide-react';
+import { Bug, Plus, Trash2, X, Activity, Search, Play, Square, Loader2 } from 'lucide-react';
 
 interface Asset {
     id: number;
@@ -17,6 +17,7 @@ export const AssetLibrary: React.FC = () => {
   const { t } = useTranslation();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Modal states
@@ -82,6 +83,7 @@ export const AssetLibrary: React.FC = () => {
     e.preventDefault();
     if (!assetFormData.file) return;
 
+    setIsUploading(true);
     const token = localStorage.getItem('token');
     const data = new FormData();
     data.append('file', assetFormData.file);
@@ -104,6 +106,8 @@ export const AssetLibrary: React.FC = () => {
       }
     } catch (err) {
       console.error('Error uploading asset:', err);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -293,23 +297,31 @@ export const AssetLibrary: React.FC = () => {
                         <button onClick={() => setIsAssetModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={24} /></button>
                     </div>
                     
-                    <form onSubmit={handleAssetUpload}>
+                    <form onSubmit={handleAssetUpload} style={{ position: 'relative' }}>
+                        {isUploading && (
+                            <div className="loading-overlay">
+                                <Loader2 size={40} className="animate-spin" />
+                                <div className="loading-text">Dosya Yükleniyor...</div>
+                            </div>
+                        )}
                         <div style={{ marginBottom: '20px' }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Varlık Adı</label>
                             <input 
                                 required
+                                disabled={isUploading}
                                 placeholder="Örn: Orman Arka Planı"
                                 value={assetFormData.name}
                                 onChange={e => setAssetFormData({...assetFormData, name: e.target.value})}
-                                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} 
+                                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', opacity: isUploading ? 0.6 : 1 }} 
                             />
                         </div>
                         <div style={{ marginBottom: '20px' }}>
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Tür</label>
                             <select 
+                                disabled={isUploading}
                                 value={assetFormData.type}
                                 onChange={e => setAssetFormData({...assetFormData, type: e.target.value})}
-                                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', opacity: isUploading ? 0.6 : 1 }}
                             >
                                 <option value="background">Arka Plan Görseli</option>
                                 <option value="music">Arka Plan Müziği</option>
@@ -323,15 +335,36 @@ export const AssetLibrary: React.FC = () => {
                             <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Dosya</label>
                             <input 
                                 required
+                                disabled={isUploading}
                                 type="file"
                                 onChange={e => setAssetFormData({...assetFormData, file: e.target.files ? e.target.files[0] : null})}
-                                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }} 
+                                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', opacity: isUploading ? 0.6 : 1 }} 
                             />
                         </div>
                         
                         <div style={{ display: 'flex', gap: '16px' }}>
-                            <button type="button" onClick={() => setIsAssetModalOpen(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer', fontWeight: '600' }}>İptal</button>
-                            <button type="submit" style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: 'var(--primary-color)', color: 'white', cursor: 'pointer', fontWeight: '600' }}>Yükle</button>
+                            <button type="button" disabled={isUploading} onClick={() => setIsAssetModalOpen(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'none', cursor: isUploading ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: isUploading ? 0.5 : 1 }}>İptal</button>
+                            <button type="submit" disabled={isUploading} style={{ 
+                                flex: 2, 
+                                padding: '12px', 
+                                borderRadius: '10px', 
+                                border: 'none', 
+                                background: 'var(--primary-color)', 
+                                color: 'white', 
+                                cursor: isUploading ? 'not-allowed' : 'pointer', 
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}>
+                                {isUploading ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Yükleniyor...
+                                    </>
+                                ) : 'Yükle'}
+                            </button>
                         </div>
                     </form>
                 </div>
