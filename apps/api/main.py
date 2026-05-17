@@ -642,6 +642,67 @@ async def upload_asset(
     
     return db_asset
 
+@app.post("/assets/bulk-upload", response_model=List[schemas.Asset])
+async def bulk_upload_assets(
+    files: List[UploadFile] = File(...),
+    type: Optional[str] = Form(None),
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bu işlemi sadece yöneticiler (admin) gerçekleştirebilir."
+        )
+    
+    uploaded_assets = []
+    base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+    
+    for file in files:
+        # Dosya uzantısını al
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        
+        # Tip belirleme (Otomatik veya seçilen tip)
+        asset_type = type
+        if not asset_type or asset_type == "auto":
+            if file_extension in [".mp3", ".wav", ".ogg", ".aac", ".m4a"]:
+                asset_type = "sound"
+            elif file_extension in [".ttf", ".otf", ".woff", ".woff2"]:
+                asset_type = "font"
+            else:
+                asset_type = "background" # Varsayılan olarak görsel/arka plan
+        
+        # Benzersiz dosya adı oluştur
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        # Dosyayı kaydet
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Varlık ismi (dosya adından türet)
+        raw_name = os.path.splitext(file.filename)[0]
+        # Temiz ve düzgün bir isim formatı yap (örn. "uzay-arkaplan" -> "Uzay Arkaplan")
+        display_name = raw_name.replace("-", " ").replace("_", " ").title()
+        
+        asset_url = f"{base_url}/uploads/{unique_filename}"
+        
+        db_asset = models.Asset(
+            name=display_name,
+            type=asset_type,
+            url=asset_url,
+            creator_id=current_user.id
+        )
+        db.add(db_asset)
+        db.commit()
+        db.refresh(db_asset)
+        
+        # Aktivite günlüğü
+        log_activity(db, current_user.id, "asset_upload", "asset", db_asset.id, {"name": display_name, "type": asset_type})
+        uploaded_assets.append(db_asset)
+        
+    return uploaded_assets
+
 @app.delete("/assets/{asset_id}")
 def delete_asset(
     asset_id: int,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { useTranslation } from 'react-i18next';
-import { Bug, Plus, Trash2, X, Activity, Search, Play, Square, Loader2 } from 'lucide-react';
+import { Bug, Plus, Trash2, X, Activity, Search, Play, Square, Loader2, Upload, FileUp, Grid, Image, Music, Type, Sparkles, Boxes } from 'lucide-react';
 
 interface Asset {
     id: number;
@@ -70,6 +70,15 @@ export const AssetLibrary: React.FC = () => {
     type: 'background',
     file: null as File | null
   });
+
+  // Bulk upload states
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkType, setBulkType] = useState('auto');
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+
+  // Tab states
+  const [activeTab, setActiveTab] = useState<string>('all');
 
   const [playingAssetId, setPlayingAssetId] = useState<number | null>(null);
   const [audioInstance, setAudioInstance] = useState<HTMLAudioElement | null>(null);
@@ -154,6 +163,64 @@ export const AssetLibrary: React.FC = () => {
     }
   };
 
+  const handleBulkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selected = Array.from(e.target.files);
+      setBulkFiles(prev => [...prev, ...selected]);
+    }
+  };
+
+  const removeBulkFile = (index: number) => {
+    setBulkFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getAutoDetectedType = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (!ext) return 'background';
+    if (['mp3', 'wav', 'ogg', 'aac', 'm4a'].includes(ext)) return 'sound';
+    if (['ttf', 'otf', 'woff', 'woff2'].includes(ext)) return 'font';
+    return 'background';
+  };
+
+  const handleBulkAssetUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bulkFiles.length === 0) return;
+
+    setIsBulkUploading(true);
+    const token = localStorage.getItem('token');
+    const data = new FormData();
+    
+    bulkFiles.forEach(file => {
+      data.append('files', file);
+    });
+    data.append('type', bulkType);
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/assets/bulk-upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: data
+      });
+
+      if (response.ok) {
+        setIsBulkModalOpen(false);
+        setBulkFiles([]);
+        setBulkType('auto');
+        fetchAssets();
+      } else {
+        const errData = await response.json();
+        alert(errData.detail || 'Toplu yükleme sırasında bir hata oluştu.');
+      }
+    } catch (err) {
+      console.error('Error in bulk uploading:', err);
+      alert('Toplu yükleme sırasında teknik bir hata oluştu.');
+    } finally {
+      setIsBulkUploading(false);
+    }
+  };
+
   const handleDeleteAsset = async (assetId: number) => {
     if (!window.confirm('Bu varlığı silmek istediğinize emin misiniz?')) return;
     const token = localStorage.getItem('token');
@@ -168,10 +235,42 @@ export const AssetLibrary: React.FC = () => {
     }
   };
 
-  const filteredAssets = assets.filter(asset => 
-    asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getAssetCount = (tabType: string) => {
+    if (tabType === 'all') return assets.length;
+    if (tabType === 'background') return assets.filter(a => a.type === 'background').length;
+    if (tabType === 'audio') return assets.filter(a => a.type === 'sound' || a.type === 'music').length;
+    if (tabType === 'font') return assets.filter(a => a.type === 'font').length;
+    if (tabType === 'spritesheet') return assets.filter(a => a.type === 'spritesheet').length;
+    if (tabType === 'effect') return assets.filter(a => a.type === 'effect').length;
+    return 0;
+  };
+
+  const tabs = [
+    { id: 'all', label: 'Tümü', icon: <Grid size={16} /> },
+    { id: 'background', label: 'Arka Planlar', icon: <Image size={16} /> },
+    { id: 'audio', label: 'Ses & Müzik', icon: <Music size={16} /> },
+    { id: 'font', label: 'Yazı Tipleri', icon: <Type size={16} /> },
+    { id: 'spritesheet', label: 'Sprite Sheet', icon: <Boxes size={16} /> },
+    { id: 'effect', label: 'Efektler', icon: <Sparkles size={16} /> },
+  ];
+
+  const filteredAssets = assets.filter(asset => {
+    // Arama terimi eşleşmesi
+    const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          asset.type.toLowerCase().includes(searchTerm.toLowerCase());
+                          
+    if (!matchesSearch) return false;
+    
+    // Tab eşleşmesi
+    if (activeTab === 'all') return true;
+    if (activeTab === 'background') return asset.type === 'background';
+    if (activeTab === 'audio') return asset.type === 'sound' || asset.type === 'music';
+    if (activeTab === 'font') return asset.type === 'font';
+    if (activeTab === 'spritesheet') return asset.type === 'spritesheet';
+    if (activeTab === 'effect') return asset.type === 'effect';
+    
+    return true;
+  });
 
   return (
     <MainLayout>
@@ -181,24 +280,46 @@ export const AssetLibrary: React.FC = () => {
             <h1 style={{ fontSize: '1.8rem', margin: '0 0 8px 0', color: 'var(--text-primary)' }}>Varlık Kütüphanesi</h1>
             <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Tüm oyunlar için ortak medya öğelerini buradan yönetin.</p>
           </div>
-          <button 
-              onClick={() => setIsAssetModalOpen(true)}
-              style={{ 
-                  background: 'var(--primary-color)', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '10px 20px', 
-                  borderRadius: '8px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
-              }}
-          >
-              <Plus size={20} /> Yeni Varlık Yükle
-          </button>
+          <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                  onClick={() => setIsAssetModalOpen(true)}
+                  style={{ 
+                      background: 'var(--bg-surface)', 
+                      color: 'var(--text-primary)', 
+                      border: '1px solid var(--border-color)', 
+                      padding: '10px 20px', 
+                      borderRadius: '8px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                  }}
+              >
+                  <Plus size={20} /> Tekli Yükle
+              </button>
+              {user.role === 'admin' && (
+                  <button 
+                      onClick={() => setIsBulkModalOpen(true)}
+                      style={{ 
+                          background: 'var(--primary-color)', 
+                          color: 'white', 
+                          border: 'none', 
+                          padding: '10px 20px', 
+                          borderRadius: '8px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '8px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'
+                      }}
+                  >
+                      <FileUp size={20} /> Toplu Varlık Yükle
+                  </button>
+              )}
+          </div>
         </header>
 
         <div style={{ marginBottom: '24px', position: 'relative' }}>
@@ -218,6 +339,75 @@ export const AssetLibrary: React.FC = () => {
                     fontSize: '1rem'
                 }}
             />
+        </div>
+
+        {/* Tabs Navigation */}
+        <div style={{ 
+            display: 'flex', 
+            gap: '10px', 
+            marginBottom: '30px', 
+            overflowX: 'auto', 
+            paddingBottom: '8px',
+            scrollbarWidth: 'none', // Firefox
+            msOverflowStyle: 'none', // IE
+        }} className="tabs-container">
+            <style>{`
+                .tabs-container::-webkit-scrollbar {
+                    display: none; /* Safari and Chrome */
+                }
+                .tab-button {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 10px 18px;
+                    border-radius: 20px;
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-surface);
+                    color: var(--text-secondary);
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    white-space: nowrap;
+                }
+                .tab-button:hover {
+                    color: var(--text-primary);
+                    border-color: var(--text-secondary);
+                    transform: translateY(-1px);
+                }
+                .tab-button.active {
+                    background: var(--primary-color);
+                    border-color: var(--primary-color);
+                    color: white;
+                    box-shadow: 0 4px 12px rgba(var(--primary-rgb, 99, 102, 241), 0.25);
+                }
+                .tab-badge {
+                    font-size: 0.75rem;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    background: rgba(0,0,0,0.06);
+                    color: var(--text-secondary);
+                    transition: all 0.2s;
+                }
+                .tab-button.active .tab-badge {
+                    background: rgba(255,255,255,0.2);
+                    color: white;
+                }
+            `}</style>
+            {tabs.map(tab => {
+                const count = getAssetCount(tab.id);
+                return (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
+                    >
+                        {tab.icon}
+                        <span>{tab.label}</span>
+                        <span className="tab-badge">{count}</span>
+                    </button>
+                );
+            })}
         </div>
 
         {isLoading ? (
@@ -409,6 +599,170 @@ export const AssetLibrary: React.FC = () => {
                                         Yükleniyor...
                                     </>
                                 ) : 'Yükle'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+        {/* Bulk Asset Upload Modal */}
+        {isBulkModalOpen && (
+            <div style={{
+                position: 'fixed',
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 1000
+            }}>
+                <div style={{
+                    background: 'var(--bg-surface)',
+                    padding: '30px',
+                    borderRadius: '20px',
+                    width: '550px',
+                    maxHeight: '85vh',
+                    overflowY: 'auto',
+                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+                }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Toplu Varlık Yükle (Yönetici)</h3>
+                        <button onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={24} /></button>
+                    </div>
+                    
+                    <form onSubmit={handleBulkAssetUpload} style={{ position: 'relative' }}>
+                        {isBulkUploading && (
+                            <div style={{
+                                position: 'absolute',
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                background: 'rgba(0,0,0,0.7)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: '12px',
+                                zIndex: 10
+                            }}>
+                                <Loader2 size={40} className="animate-spin" style={{ color: 'var(--primary-color)' }} />
+                                <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>Varlıklar Yükleniyor...</div>
+                            </div>
+                        )}
+                        <div style={{ marginBottom: '20px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Varlık Türü</label>
+                            <select 
+                                disabled={isBulkUploading}
+                                value={bulkType}
+                                onChange={e => setBulkType(e.target.value)}
+                                style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', opacity: isBulkUploading ? 0.6 : 1 }}
+                            >
+                                <option value="auto">Uzantıya Göre Otomatik Tespit Et</option>
+                                <option value="background">Arka Plan Görseli</option>
+                                <option value="music">Arka Plan Müziği</option>
+                                <option value="sound">Ses Efekti</option>
+                                <option value="font">Yazı Tipi (Font)</option>
+                                <option value="spritesheet">Sprite Sheet (PNG)</option>
+                                <option value="effect">Görsel Efekt (JSON/Atlas)</option>
+                            </select>
+                        </div>
+                        
+                        <div style={{ marginBottom: '24px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', fontWeight: '600' }}>Dosyaları Seçin</label>
+                            <div 
+                                style={{
+                                    border: '2px dashed var(--border-color)',
+                                    borderRadius: '12px',
+                                    padding: '30px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    background: 'rgba(0,0,0,0.02)',
+                                    transition: 'border-color 0.2s',
+                                    position: 'relative'
+                                }}
+                                onClick={() => document.getElementById('bulk-file-input')?.click()}
+                            >
+                                <Upload size={36} style={{ color: 'var(--text-secondary)', marginBottom: '8px' }} />
+                                <div style={{ fontSize: '0.95rem', fontWeight: '600', color: 'var(--text-primary)' }}>Tıklayarak birden fazla dosya seçin</div>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>PNG, JPG, MP3, WAV, TTF vb. formatlar</div>
+                                <input 
+                                    id="bulk-file-input"
+                                    type="file"
+                                    multiple
+                                    onChange={handleBulkFileChange}
+                                    style={{ display: 'none' }}
+                                />
+                            </div>
+                        </div>
+
+                        {bulkFiles.length > 0 && (
+                            <div style={{ marginBottom: '30px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '0.9rem', fontWeight: '600' }}>Seçilen Dosyalar ({bulkFiles.length})</span>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setBulkFiles([])}
+                                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
+                                    >
+                                        Tümünü Temizle
+                                    </button>
+                                </div>
+                                <div style={{ 
+                                    border: '1px solid var(--border-color)', 
+                                    borderRadius: '8px', 
+                                    maxHeight: '180px', 
+                                    overflowY: 'auto',
+                                    background: 'var(--bg-input)'
+                                }}>
+                                    {bulkFiles.map((file, idx) => (
+                                        <div key={idx} style={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'center', 
+                                            padding: '10px 12px',
+                                            borderBottom: idx < bulkFiles.length - 1 ? '1px solid var(--border-color)' : 'none',
+                                            fontSize: '0.85rem'
+                                        }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '70%' }}>
+                                                <span style={{ fontWeight: '500', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{file.name}</span>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                                    {(file.size / 1024).toFixed(1)} KB • {bulkType === 'auto' ? `Otomatik: ${getAutoDetectedType(file.name)}` : bulkType}
+                                                </span>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => removeBulkFile(idx)}
+                                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div style={{ display: 'flex', gap: '16px' }}>
+                            <button type="button" disabled={isBulkUploading} onClick={() => setIsBulkModalOpen(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'none', cursor: isBulkUploading ? 'not-allowed' : 'pointer', fontWeight: '600', opacity: isBulkUploading ? 0.5 : 1 }}>İptal</button>
+                            <button type="submit" disabled={isBulkUploading || bulkFiles.length === 0} style={{ 
+                                flex: 2, 
+                                padding: '12px', 
+                                borderRadius: '10px', 
+                                border: 'none', 
+                                background: bulkFiles.length === 0 ? 'var(--border-color)' : 'var(--primary-color)', 
+                                color: 'white', 
+                                cursor: (isBulkUploading || bulkFiles.length === 0) ? 'not-allowed' : 'pointer', 
+                                fontWeight: '600',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}>
+                                {isBulkUploading ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        Yükleniyor...
+                                    </>
+                                ) : 'Tümünü Yükle'}
                             </button>
                         </div>
                     </form>
