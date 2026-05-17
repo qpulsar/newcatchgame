@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Search, Bell, Settings, Moon, Sun } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
 import './layout.css';
@@ -7,10 +8,12 @@ import './layout.css';
 export const Navbar: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
 
   const handleLanguageToggle = () => {
     const nextLang = i18n.language === 'tr' ? 'en' : 'tr';
     i18n.changeLanguage(nextLang);
+    window.localStorage.setItem('language', nextLang);
   };
 
   return (
@@ -40,7 +43,7 @@ export const Navbar: React.FC = () => {
           <Bell size={20} />
         </button>
 
-        <button className="icon-btn">
+        <button className="icon-btn" onClick={() => navigate('/settings')} title="Sistem Ayarları">
           <Settings size={20} />
         </button>
 

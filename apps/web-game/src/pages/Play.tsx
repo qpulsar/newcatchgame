@@ -12,13 +12,14 @@ export const Play: React.FC = () => {
 
     useEffect(() => {
         fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels`)
-            .then(res => res.json())
+            .then(res => res.ok ? res.json() : Promise.reject(res))
             .then(data => {
-                setLevels(data);
+                setLevels(Array.isArray(data) ? data : []);
                 setLoading(false);
             })
             .catch(err => {
                 console.error('Error fetching levels:', err);
+                setLevels([]);
                 setLoading(false);
             });
     }, []);
@@ -70,7 +71,10 @@ export const Play: React.FC = () => {
                         <button onClick={() => setSelectedLevel(null)} className="btn-secondary">Geri Dön</button>
                     </header>
                     
-                    <GameContainer projectData={selectedLevel} />
+                    <GameContainer 
+                        projectData={selectedLevel} 
+                        onClose={() => setSelectedLevel(null)} 
+                    />
                     
                     <div className="game-info" style={{ marginTop: '30px', width: '100%', maxWidth: '1024px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
@@ -220,13 +224,14 @@ const Leaderboard: React.FC<{ levelId: number }> = ({ levelId }) => {
 
     useEffect(() => {
         fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/leaderboard/${levelId}`)
-            .then(res => res.json())
+            .then(res => res.ok ? res.json() : Promise.reject(res))
             .then(data => {
-                setData(data);
+                setData(Array.isArray(data) ? data : []);
                 setLoading(false);
             })
             .catch(err => {
                 console.error('Error fetching leaderboard:', err);
+                setData([]);
                 setLoading(false);
             });
     }, [levelId]);

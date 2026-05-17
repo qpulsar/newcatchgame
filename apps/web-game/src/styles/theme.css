@@ -54,6 +54,28 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+:root.high-contrast {
+  --text-primary: #ffffff;
+  --text-secondary: #f3f4f6;
+  --border-color: #ffffff;
+  --bg-surface: #111111;
+  --bg-navbar: #0b0b0b;
+  --bg-sidebar: #050505;
+  --bg-input: #1f1f1f;
+  --primary-color: #ffd400;
+  --primary-hover: #e0bc00;
+  --success-color: #52ffa8;
+  --error-color: #ff7a7a;
+}
+
+:root.reduced-motion *,
+:root.reduced-motion *::before,
+:root.reduced-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
 /* Scrollbar Özelleştirme */
 ::-webkit-scrollbar {
   width: 8px;

@@ -49,7 +49,7 @@ export interface LevelData {
     music_url?: string;
     effect_correct?: string;
     effect_wrong?: string;
-    targets: TargetData[];
+    // targets: TargetData[]; // Deprecated for catch type
     correct_concepts: ConceptData[];
     wrong_concepts: ConceptData[];
     duration: number;
@@ -60,23 +60,13 @@ export interface LevelData {
     screens?: LevelScreens;
 }
 
-export interface TargetData {
-    category: string;
-    label: string;
-    color: number;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
-
 export interface ConceptData {
     text: string;
-    category: string;
     weight: number;
     description?: string;
     image_url?: string;
     sound_url?: string;
+    category?: string; // Kept for future compatibility (e.g. sorting)
 }
 
 export interface LevelConfig {
@@ -100,6 +90,43 @@ export interface CommonSettings {
     showLeaderboard: boolean;
     allowRetries: boolean;
     themeColor?: string;
+    ui_style?: 'classic' | 'modern' | 'minimal' | 'gaming';
     initial_message?: string;
     completion_message?: string;
+}
+
+export interface GameAttempt {
+    id?: number;
+    level_id: number;
+    score: number;
+    accuracy: number;
+    duration: number;
+    details: AttemptDetails;
+    created_at?: string;
+}
+
+export interface AttemptDetails {
+    total_levels: number;
+    completed_levels: number;
+    spawned_correct: number;
+    spawned_wrong: number;
+    caught_correct: number;
+    caught_wrong: number;
+    missed_correct: number;
+    missed_wrong: number;
+    max_streak: number;
+    accuracy: number;
+    level_summaries: LevelSummary[];
+    success: boolean;
+    fail_reason?: 'timeout' | 'errors' | 'score';
+}
+
+export interface LevelSummary {
+    level_index: number;
+    score: number;
+    caught_correct: number;
+    caught_wrong: number;
+    missed_correct: number;
+    accuracy: number;
+    success: boolean;
 }

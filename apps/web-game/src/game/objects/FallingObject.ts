@@ -6,6 +6,8 @@ export class FallingObject extends Phaser.GameObjects.Container {
     private background: Phaser.GameObjects.Graphics;
     private label: Phaser.GameObjects.Text;
     private angularVelocity: number = 0;
+    private contentWidth: number;
+    private contentHeight: number;
 
     constructor(scene: Phaser.Scene, x: number, y: number, text: string, category: string) {
         super(scene, x, y);
@@ -24,6 +26,9 @@ export class FallingObject extends Phaser.GameObjects.Container {
         // Arka plan (Metne göre boyutlandır)
         const width = this.label.width + 10;
         const height = this.label.height + 6;
+        this.contentWidth = width;
+        this.contentHeight = height;
+        this.setSize(width, height);
 
         this.background = scene.add.graphics();
         this.background.fillStyle(0xffffff, 1);
@@ -41,18 +46,23 @@ export class FallingObject extends Phaser.GameObjects.Container {
 
         // Fizik gövdesini boyutlandır
         const body = this.body as Phaser.Physics.Arcade.Body;
-        body.setSize(width, height);
-        body.setOffset(-width / 2, -height / 2);
-        
+        body.setSize(width, height, true);
         body.setCollideWorldBounds(false);
-        body.setBounce(0.2);
-        
-        // Varsayılan açısal hız
-        this.angularVelocity = Phaser.Math.Between(-100, 100);
+        body.setAllowGravity(false);
+        body.moves = true;
+        body.setImmovable(false);
+        this.angularVelocity = 0;
     }
 
     public setAngularVelocity(velocity: number) {
         this.angularVelocity = velocity;
+    }
+
+    public getSafeRadius() {
+        return {
+            width: this.contentWidth,
+            height: this.contentHeight
+        };
     }
 
     // Phaser Container preUpdate handles children but we need it for rotation

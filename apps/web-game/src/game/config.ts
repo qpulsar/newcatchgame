@@ -3,6 +3,7 @@ import { Preload } from './scenes/Preload';
 import { MainMenu } from './scenes/MainMenu';
 import { Game } from './scenes/Game';
 import { Editor } from './scenes/Editor';
+import { Summary } from './scenes/Summary';
 import Phaser from 'phaser';
 
 export const GameConfig: Phaser.Types.Core.GameConfig = {
@@ -27,6 +28,7 @@ export const GameConfig: Phaser.Types.Core.GameConfig = {
         Preload,
         MainMenu,
         Game,
-        Editor
+        Editor,
+        Summary
     ]
 };

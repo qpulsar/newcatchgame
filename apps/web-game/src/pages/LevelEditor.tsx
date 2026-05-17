@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MainLayout } from '../components/layout/MainLayout';
 import { GameContainer } from '../components/game/GameContainer';
-import type { GameProject, LevelData, ConceptData, TargetData } from '../game/types';
+import type { GameProject, LevelData, ConceptData } from '../game/types';
 import { 
     Save, Plus, Trash2, Settings as SettingsIcon, Layout, Database, 
-    Play, X, ChevronRight, Copy, ArrowUp, ArrowDown, Info, 
-    Palette, Music, Zap, BarChart2, Globe, Monitor, Trophy, Flag, ChevronDown
+    Play, X, ChevronRight, ChevronLeft, Copy, ArrowUp, ArrowDown, Info, 
+    Palette, Music, Zap, BarChart2, Globe, Monitor, Trophy, Flag, ChevronDown,
+    Beaker, Hash, Sparkles, PanelRightClose, PanelRightOpen
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-type EditorTab = 'basics' | 'concepts' | 'screens' | 'visual' | 'audio' | 'gameplay' | 'scoring' | 'publishing' | 'system';
-type EditorPhase = 'basics' | 'content' | 'design' | 'rules';
+type EditorTab = 'basics' | 'concepts' | 'rules' | 'visual' | 'publish';
+type EditorPhase = 'basics' | 'content' | 'rules' | 'design' | 'publish';
 
 // --- Helper Functions ---
 function createGlobalScreens() {
@@ -32,23 +33,24 @@ function createDefaultLevel(title: string): LevelData {
     return {
         id: crypto.randomUUID(),
         title,
-        instruction: 'Doğru nesneleri yakala!',
+        instruction: 'Doğru nesneleri yakala, yanlışlardan kaçın!',
         learning_goal: '',
-        background: 'background',
-        targets: [
-            { category: 'A', label: 'Hedef A', color: 0x6366f1, x: 256, y: 648, width: 200, height: 120 },
-            { category: 'B', label: 'Hedef B', color: 0xec4899, x: 768, y: 648, width: 200, height: 120 }
-        ],
-        correct_concepts: [{ text: 'Doğru 1', category: 'A', weight: 1 }],
-        wrong_concepts: [{ text: 'Yanlış 1', category: 'B', weight: 1 }],
+        background: '',
+        correct_concepts: [{ text: 'Doğru Kavram 1', weight: 1, description: '' }],
+        wrong_concepts: [{ text: 'Yanlış Kavram 1', weight: 1, description: '' }],
         duration: 60,
         target_score: 50,
         success_percentage: 70,
+        max_errors: 3,
         config: {
             spawnRate: 2000,
             gravityY: 300,
             playerSpeed: 600,
-            itemSpeed: 200
+            itemSpeed: 200,
+            points_correct: 10,
+            points_wrong: 5,
+            rotation_enabled: false,
+            rotation_speed: 3
         },
         screens: createLevelScreens()
     } as any;
@@ -57,6 +59,8 @@ function createDefaultLevel(title: string): LevelData {
 export const LevelEditor: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const { id } = useParams<{ id: string }>();
+    const numericRouteId = id ? Number(id) : undefined;
     
     // Initial project state from navigation state if available
     const [project, setProject] = useState<GameProject>(() => {
@@ -77,6 +81,32 @@ export const LevelEditor: React.FC = () => {
             }
         };
     });
+
+    // --- Fetch / Update URL ---
+    useEffect(() => {
+        if (numericRouteId && project.id !== numericRouteId) {
+            const token = localStorage.getItem('token');
+            if (token) {
+                fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/levels/${numericRouteId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(r => {
+                    if (r.ok) return r.json();
+                    throw new Error('Proje bulunamadı');
+                })
+                .then(data => {
+                    if (data) setProject(data);
+                })
+                .catch(err => console.error(err));
+            }
+        }
+    }, [numericRouteId, project.id]);
+
+    useEffect(() => {
+        if (project.id && project.id !== numericRouteId) {
+            navigate(`/editor/${project.id}`, { replace: true, state: { projectToLoad: project } });
+        }
+    }, [project.id, numericRouteId, navigate]);
 
     // --- Migration and Initialization ---
     useEffect(() => {
@@ -130,12 +160,7 @@ export const LevelEditor: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => {
-        if (location.state?.projectToLoad) {
-            // Clear navigation state to prevent re-loading on refresh
-            navigate(location.pathname, { replace: true, state: {} });
-        }
-    }, [location, navigate]);
+
 
     const [activeTab, setActiveTab] = useState<EditorTab>('basics');
     const [activePhase, setActivePhase] = useState<EditorPhase>('basics');
@@ -146,8 +171,73 @@ export const LevelEditor: React.FC = () => {
     const [testMode, setTestMode] = useState<'single' | 'all'>('single');
     const [conceptSearch, setConceptSearch] = useState('');
     const [libraryAssets, setLibraryAssets] = useState<any[]>([]);
+    const [sidebarWidth, setSidebarWidth] = useState(460);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const [isWizardMode, setIsWizardMode] = useState(false);
+    const [wizardStep, setWizardStep] = useState(0);
+    const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+    const [bulkConceptModal, setBulkConceptModal] = useState<{
+        isOpen: boolean;
+        levelIndex: number;
+        conceptType: 'correct' | 'wrong';
+        value: string;
+    }>({
+        isOpen: false,
+        levelIndex: 0,
+        conceptType: 'correct',
+        value: ''
+    });
+    const isResizing = useRef(false);
     
+    // Seviye seçildiğinde veya temel ayarlar/kavramlar/kurallar sekmesindeyken 
+    // önizlemede otomatik olarak o seviyenin oyun (gameplay) ekranını göster
+    useEffect(() => {
+        if (activePhase === 'basics' || activePhase === 'content' || activePhase === 'rules') {
+            setActiveScreen('gameplay');
+        }
+    }, [selectedLevelIndex, activePhase]);
+
+    const mainLayoutRef = useRef<HTMLDivElement>(null);
+    
+    // --- Resizing Logic ---
+    const startResizing = useCallback(() => {
+        isResizing.current = true;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        isResizing.current = false;
+        document.body.style.cursor = 'default';
+        document.body.style.userSelect = 'auto';
+    }, []);
+
+    const resize = useCallback((e: MouseEvent) => {
+        if (!isResizing.current || !mainLayoutRef.current) return;
+        const rect = mainLayoutRef.current.getBoundingClientRect();
+        const newWidth = e.clientX - rect.left;
+        if (newWidth > 340 && newWidth < 760) {
+            setSidebarWidth(newWidth);
+        }
+    }, []);
+
+    useEffect(() => {
+        window.addEventListener('mousemove', resize);
+        window.addEventListener('mouseup', stopResizing);
+        return () => {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+        };
+    }, [resize, stopResizing]);
+
     const currentLevel = project.data.levels[selectedLevelIndex] || project.data.levels[0];
+    const wizardSteps: Array<{ phase: EditorPhase; tab: EditorTab; title: string; description: string }> = [
+        { phase: 'basics', tab: 'basics', title: 'Proje Temeli', description: 'Başlık, açıklama, ders ve seviyeleri birlikte netleştir.' },
+        { phase: 'content', tab: 'concepts', title: 'Kavram Havuzu', description: 'Doğru ve yanlış kavramları temiz biçimde oluştur.' },
+        { phase: 'rules', tab: 'rules', title: 'Oyun Kuralları', description: 'Süre, skor ve başarı eşiklerini ince ayarla.' },
+        { phase: 'design', tab: 'visual', title: 'Görünüm ve Ekranlar', description: 'Kapak, ara ekranlar ve medya deneyimini düzenle.' },
+        { phase: 'publish', tab: 'publish', title: 'Yayın Kontrolü', description: 'UI stili, yayın görünürlüğü ve son kontrolleri tamamla.' }
+    ];
 
     // --- Fetch Assets ---
     useEffect(() => {
@@ -170,7 +260,7 @@ export const LevelEditor: React.FC = () => {
                         onChange={(e) => {
                             if (e.target.value !== 'custom') onChange(e.target.value);
                         }}
-                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                        style={{ width: '100%', minHeight: '44px', padding: '10px 12px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                     >
                         <option value="custom">Özel URL veya Sabit...</option>
                         {filtered.map(a => (
@@ -182,7 +272,7 @@ export const LevelEditor: React.FC = () => {
                             placeholder="URL girin..."
                             value={value}
                             onChange={(e) => onChange(e.target.value)}
-                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                            style={{ width: '100%', minHeight: '44px', padding: '10px 12px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'var(--bg-input)', color: 'var(--text-primary)', boxSizing: 'border-box' }}
                         />
                     )}
                 </div>
@@ -234,106 +324,113 @@ export const LevelEditor: React.FC = () => {
         setProject({ ...project, data: { ...project.data, levels: newList } });
     };
 
+    const goToEditorStep = (phase: EditorPhase, tab: EditorTab) => {
+        setActivePhase(phase);
+        setActiveTab(tab);
+    };
+
+    const startWizard = () => {
+        setIsWizardMode(true);
+        setWizardStep(0);
+        goToEditorStep(wizardSteps[0].phase, wizardSteps[0].tab);
+    };
+
+    const stopWizard = () => {
+        setIsWizardMode(false);
+    };
+
+    const goToWizardStep = (index: number) => {
+        const nextStep = wizardSteps[index];
+        setWizardStep(index);
+        goToEditorStep(nextStep.phase, nextStep.tab);
+    };
+
+    const openBulkConceptModal = (levelIndex: number, conceptType: 'correct' | 'wrong') => {
+        setBulkConceptModal({
+            isOpen: true,
+            levelIndex,
+            conceptType,
+            value: ''
+        });
+        setSelectedLevelIndex(levelIndex);
+    };
+
+    const applyBulkConcepts = () => {
+        const items = bulkConceptModal.value
+            .split(/[\n,]/)
+            .map(item => item.trim())
+            .filter(Boolean)
+            .map(text => ({ text, weight: 1 }));
+
+        if (!items.length) {
+            setBulkConceptModal(prev => ({ ...prev, isOpen: false, value: '' }));
+            return;
+        }
+
+        const targetLevel = project.data.levels[bulkConceptModal.levelIndex];
+        if (!targetLevel) {
+            setBulkConceptModal(prev => ({ ...prev, isOpen: false, value: '' }));
+            return;
+        }
+
+        const key = bulkConceptModal.conceptType === 'correct' ? 'correct_concepts' : 'wrong_concepts';
+        const updatedLevels = [...project.data.levels];
+        updatedLevels[bulkConceptModal.levelIndex] = {
+            ...targetLevel,
+            [key]: [...targetLevel[key], ...items]
+        };
+
+        setProject({
+            ...project,
+            data: {
+                ...project.data,
+                levels: updatedLevels
+            }
+        });
+        setBulkConceptModal(prev => ({ ...prev, isOpen: false, value: '' }));
+    };
+
     const applyPhysicalQuantitiesTemplate = () => {
         const levels: LevelData[] = [
             {
                 id: crypto.randomUUID(),
                 title: 'Temel Büyüklükler',
                 instruction: 'Yalnızca temel büyüklükleri yakala!',
-                background: 'background',
+                background: '',
                 correct_concepts: [
-                    { text: 'Uzunluk', category: 'Temel', weight: 1 },
-                    { text: 'Kütle', category: 'Temel', weight: 1 },
-                    { text: 'Zaman', category: 'Temel', weight: 1 },
-                    { text: 'Sıcaklık', category: 'Temel', weight: 1 },
-                    { text: 'Işık Şiddeti', category: 'Temel', weight: 1 },
-                    { text: 'Akım Şiddeti', category: 'Temel', weight: 1 },
-                    { text: 'Madde Miktarı', category: 'Temel', weight: 1 },
+                    { text: 'Uzunluk', weight: 1, description: '' },
+                    { text: 'Kütle', weight: 1, description: '' },
+                    { text: 'Zaman', weight: 1, description: '' },
+                    { text: 'Sıcaklık', weight: 1, description: '' },
+                    { text: 'Akım Şiddeti', weight: 1, description: '' }
                 ],
                 wrong_concepts: [
-                    { text: 'Hız', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Kuvvet', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Enerji', category: 'Türetilmiş', weight: 1 },
-                    { text: 'İvme', category: 'Türetilmiş', weight: 1 },
+                    { text: 'Hız', weight: 1, description: '' },
+                    { text: 'Kuvvet', weight: 1, description: '' },
+                    { text: 'Enerji', weight: 1, description: '' }
                 ],
-                duration: 60, target_score: 50, success_percentage: 70,
-                config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200 },
-                targets: [],
-                screens: {
-                    cover: { title: 'Temel Büyüklükler', description: 'Yalnızca temel büyüklükleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
-                    victory: { title: 'Tebrikler!', description: 'Temel büyüklükleri başarıyla kavradın.', buttonText: 'Sıradaki Seviye' },
-                    defeat: { title: 'Hatalı Seçim!', description: 'Skorun yetersiz kaldı. Tekrar denemek ister misin?', buttonText: 'Tekrar Dene' },
-                    infoStart: { title: 'Bilgi', description: 'Bu seviyede fiziksel büyüklükleri öğreneceğiz.', buttonText: 'Anladım', enabled: false },
-                    infoEnd: { title: 'Özet', description: 'Harika iş çıkardın! Temel büyüklükleri kavradın.', buttonText: 'Devam Et', enabled: false }
-                }
+                duration: 60, target_score: 50, success_percentage: 70, max_errors: 3,
+                config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200, points_correct: 10, points_wrong: 5, rotation_enabled: false, rotation_speed: 3 },
+                screens: createLevelScreens()
             },
             {
                 id: crypto.randomUUID(),
                 title: 'Türetilmiş Büyüklükler',
                 instruction: 'Yalnızca türetilmiş büyüklükleri yakala!',
-                background: 'background',
+                background: '',
                 correct_concepts: [
-                    { text: 'Hız', category: 'Türetilmiş', weight: 1 },
-                    { text: 'İvme', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Kuvvet', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Enerji', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Basınç', category: 'Türetilmiş', weight: 1 },
-                    { text: 'Güç', category: 'Türetilmiş', weight: 1 },
+                    { text: 'Hız', weight: 1, description: '' },
+                    { text: 'İvme', weight: 1, description: '' },
+                    { text: 'Kuvvet', weight: 1, description: '' },
+                    { text: 'Enerji', weight: 1, description: '' }
                 ],
                 wrong_concepts: [
-                    { text: 'Uzunluk', category: 'Temel', weight: 1 },
-                    { text: 'Zaman', category: 'Temel', weight: 1 },
-                    { text: 'Kütle', category: 'Temel', weight: 1 },
+                    { text: 'Uzunluk', weight: 1, description: '' },
+                    { text: 'Zaman', weight: 1, description: '' },
+                    { text: 'Kütle', weight: 1, description: '' }
                 ],
-                duration: 60, target_score: 60, success_percentage: 70,
-                config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220 },
-                targets: [],
-                screens: createLevelScreens()
-            },
-            {
-                id: crypto.randomUUID(),
-                title: 'Skaler Büyüklükler',
-                instruction: 'Yalnızca skaler (yönsüz) büyüklükleri yakala!',
-                background: 'background',
-                correct_concepts: [
-                    { text: 'Sürat', category: 'Skaler', weight: 1 },
-                    { text: 'Sıcaklık', category: 'Skaler', weight: 1 },
-                    { text: 'Enerji', category: 'Skaler', weight: 1 },
-                    { text: 'Hacim', category: 'Skaler', weight: 1 },
-                    { text: 'Kütle', category: 'Skaler', weight: 1 },
-                    { text: 'Özkütle', category: 'Skaler', weight: 1 },
-                ],
-                wrong_concepts: [
-                    { text: 'Hız', category: 'Vektörel', weight: 1 },
-                    { text: 'Kuvvet', category: 'Vektörel', weight: 1 },
-                    { text: 'İvme', category: 'Vektörel', weight: 1 },
-                ],
-                duration: 60, target_score: 60, success_percentage: 70,
-                config: { spawnRate: 1300, gravityY: 400, playerSpeed: 600, itemSpeed: 240 },
-                targets: [],
-                screens: createLevelScreens()
-            },
-            {
-                id: crypto.randomUUID(),
-                title: 'Vektörel Büyüklükler',
-                instruction: 'Yalnızca vektörel (yönlü) büyüklükleri yakala!',
-                background: 'background',
-                correct_concepts: [
-                    { text: 'Hız', category: 'Vektörel', weight: 1 },
-                    { text: 'Kuvvet', category: 'Vektörel', weight: 1 },
-                    { text: 'İvme', category: 'Vektörel', weight: 1 },
-                    { text: 'Ağırlık', category: 'Vektörel', weight: 1 },
-                    { text: 'Yer Değiştirme', category: 'Vektörel', weight: 1 },
-                    { text: 'Momentum', category: 'Vektörel', weight: 1 },
-                ],
-                wrong_concepts: [
-                    { text: 'Sürat', category: 'Skaler', weight: 1 },
-                    { text: 'Zaman', category: 'Skaler', weight: 1 },
-                    { text: 'Kütle', category: 'Skaler', weight: 1 },
-                ],
-                duration: 60, target_score: 70, success_percentage: 70,
-                config: { spawnRate: 1200, gravityY: 450, playerSpeed: 600, itemSpeed: 260 },
-                targets: [],
+                duration: 60, target_score: 60, success_percentage: 70, max_errors: 3,
+                config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220, points_correct: 10, points_wrong: 5, rotation_enabled: false, rotation_speed: 3 },
                 screens: createLevelScreens()
             }
         ];
@@ -341,7 +438,98 @@ export const LevelEditor: React.FC = () => {
         setProject({
             ...project,
             title: 'Fiziksel Büyüklükler',
-            description: 'Fiziksel büyüklüklerin sınıflandırıldığı 4 seviyeli eğitsel oyun.',
+            description: 'Temel ve türetilmiş büyüklükleri ayırt etmeyi öğreten oyun.',
+            data: { ...project.data, levels }
+        });
+        setSelectedLevelIndex(0);
+    };
+
+    const applyChemistryTemplate = () => {
+        const levels: LevelData[] = [
+            {
+                id: crypto.randomUUID(),
+                title: 'Elementler',
+                instruction: 'Yalnızca element sembollerini yakala!',
+                background: '',
+                correct_concepts: [
+                    { text: 'H', weight: 1, description: 'Hidrojen' },
+                    { text: 'He', weight: 1, description: 'Helyum' },
+                    { text: 'Li', weight: 1, description: 'Lityum' },
+                    { text: 'O', weight: 1, description: 'Oksijen' },
+                    { text: 'Au', weight: 1, description: 'Altın' }
+                ],
+                wrong_concepts: [
+                    { text: 'H2O', weight: 1, description: 'Su' },
+                    { text: 'CO2', weight: 1, description: 'Karbondioksit' },
+                    { text: 'NaCl', weight: 1, description: 'Tuz' }
+                ],
+                duration: 60, target_score: 50, success_percentage: 70, max_errors: 3,
+                config: { spawnRate: 1500, gravityY: 300, playerSpeed: 600, itemSpeed: 200, points_correct: 10, points_wrong: 5, rotation_enabled: false, rotation_speed: 3 },
+                screens: createLevelScreens()
+            },
+            {
+                id: crypto.randomUUID(),
+                title: 'Bileşikler',
+                instruction: 'Yalnızca bileşik formüllerini yakala!',
+                background: '',
+                correct_concepts: [
+                    { text: 'H2O', weight: 1, description: 'Su' },
+                    { text: 'CO2', weight: 1, description: 'Karbondioksit' },
+                    { text: 'NH3', weight: 1, description: 'Amonyak' },
+                    { text: 'CH4', weight: 1, description: 'Metan' }
+                ],
+                wrong_concepts: [
+                    { text: 'Fe', weight: 1, description: 'Demir' },
+                    { text: 'Cu', weight: 1, description: 'Bakır' },
+                    { text: 'Ag', weight: 1, description: 'Gümüş' }
+                ],
+                duration: 60, target_score: 60, success_percentage: 70, max_errors: 3,
+                config: { spawnRate: 1400, gravityY: 350, playerSpeed: 600, itemSpeed: 220, points_correct: 10, points_wrong: 5, rotation_enabled: false, rotation_speed: 3 },
+                screens: createLevelScreens()
+            }
+        ];
+        
+        setProject({
+            ...project,
+            title: 'Kimya: Elementler ve Bileşikler',
+            description: 'Kimyasal sembolleri ve formülleri tanıma oyunu.',
+            data: { ...project.data, levels }
+        });
+        setSelectedLevelIndex(0);
+    };
+
+    const applyMathTemplate = () => {
+        const levels: LevelData[] = [
+            {
+                id: crypto.randomUUID(),
+                title: 'Asal Sayılar',
+                instruction: 'Yalnızca asal sayıları yakala!',
+                background: '',
+                correct_concepts: [
+                    { text: '2', weight: 1, description: '' },
+                    { text: '3', weight: 1, description: '' },
+                    { text: '5', weight: 1, description: '' },
+                    { text: '7', weight: 1, description: '' },
+                    { text: '11', weight: 1, description: '' },
+                    { text: '13', weight: 1, description: '' }
+                ],
+                wrong_concepts: [
+                    { text: '4', weight: 1, description: '' },
+                    { text: '6', weight: 1, description: '' },
+                    { text: '8', weight: 1, description: '' },
+                    { text: '9', weight: 1, description: '' },
+                    { text: '10', weight: 1, description: '' }
+                ],
+                duration: 45, target_score: 40, success_percentage: 80, max_errors: 3,
+                config: { spawnRate: 1200, gravityY: 320, playerSpeed: 700, itemSpeed: 250, points_correct: 10, points_wrong: 5, rotation_enabled: false },
+                screens: createLevelScreens()
+            }
+        ];
+        
+        setProject({
+            ...project,
+            title: 'Matematik: Asal Sayılar',
+            description: 'Sayılar arasından asalları seçme hızı testi.',
             data: { ...project.data, levels }
         });
         setSelectedLevelIndex(0);
@@ -398,12 +586,18 @@ export const LevelEditor: React.FC = () => {
     const renderPhaseButton = (id: EditorPhase, label: string) => (
         <button 
             onClick={() => {
-                setActivePhase(id);
                 // Set first tab of phase as active
-                if (id === 'basics') setActiveTab('basics');
-                if (id === 'content') setActiveTab('concepts');
-                if (id === 'design') setActiveTab('visual');
-                if (id === 'rules') setActiveTab('gameplay');
+                if (id === 'basics') goToEditorStep('basics', 'basics');
+                if (id === 'content') goToEditorStep('content', 'concepts');
+                if (id === 'rules') goToEditorStep('rules', 'rules');
+                if (id === 'design') goToEditorStep('design', 'visual');
+                if (id === 'publish') goToEditorStep('publish', 'publish');
+                if (isWizardMode) {
+                    const matchingIndex = wizardSteps.findIndex(step => step.phase === id);
+                    if (matchingIndex >= 0) {
+                        setWizardStep(matchingIndex);
+                    }
+                }
             }}
             className={`phase-btn ${activePhase === id ? 'active' : ''}`}
         >
@@ -411,9 +605,19 @@ export const LevelEditor: React.FC = () => {
         </button>
     );
 
+    const renderPhaseNav = () => (
+        <div className="phase-nav">
+            {renderPhaseButton('basics', '1. Başlangıç')}
+            {renderPhaseButton('content', '2. İçerik')}
+            {renderPhaseButton('rules', '3. Kurallar')}
+            {renderPhaseButton('design', '4. Tasarım & Ekranlar')}
+            {renderPhaseButton('publish', '5. Yayın')}
+        </div>
+    );
+
     return (
         <MainLayout>
-            <div className="editor-container">
+            <div className="editor-container editor-ui-scope">
                 {/* Slim Header Area */}
                 <header className="editor-header">
                     <div className="header-left">
@@ -421,14 +625,16 @@ export const LevelEditor: React.FC = () => {
                             <span className="status-badge">{project.status}</span>
                             <h1 title={project.title}>{project.title}</h1>
                         </div>
-                        <div className="phase-nav">
-                            {renderPhaseButton('basics', 'Temeller')}
-                            {renderPhaseButton('content', 'İçerik')}
-                            {renderPhaseButton('design', 'Tasarım')}
-                            {renderPhaseButton('rules', 'Ayarlar')}
-                        </div>
+                        {renderPhaseNav()}
                     </div>
                     <div className="header-actions">
+                        <button
+                            className={`btn-wizard ${isWizardMode ? 'active' : ''}`}
+                            onClick={() => (isWizardMode ? stopWizard() : startWizard())}
+                            title="İstek üzerine adım adım rehber"
+                        >
+                            <Sparkles size={16} /> {isWizardMode ? 'Wizardı Kapat' : 'Wizardı Başlat'}
+                        </button>
                         <button 
                             className={`btn-icon ${showSummary ? 'active' : ''}`} 
                             onClick={() => setShowSummary(!showSummary)}
@@ -448,38 +654,74 @@ export const LevelEditor: React.FC = () => {
                     </div>
                 </header>
 
-                <div className="editor-main-layout">
-                    {/* SLIM LEFT PANEL: Settings & Tabs */}
-                    <aside className="editor-left-panel">
-                            <nav className={`editor-tabs ${(activePhase === 'design' || activePhase === 'rules') ? 'vertical' : ''}`}>
-                                {activePhase === 'basics' && (
-                                    <>
-                                        {renderTabButton('basics', 'Temeller', <Globe size={18} />)}
-                                    </>
-                                )}
-                                {activePhase === 'content' && (
-                                    <>
-                                        {renderTabButton('concepts', 'Kavramlar', <Database size={18} />)}
-                                        {renderTabButton('screens', 'Ekranlar', <Monitor size={18} />)}
-                                    </>
-                                )}
-                                {activePhase === 'design' && (
-                                    <>
-                                        {renderTabButton('visual', 'Görsel', <Palette size={18} />)}
-                                        {renderTabButton('audio', 'Ses', <Music size={18} />)}
-                                    </>
-                                )}
-                                {activePhase === 'rules' && (
-                                    <>
-                                        {renderTabButton('gameplay', 'Oynanış', <Zap size={18} />)}
-                                        {renderTabButton('scoring', 'Puanlama', <BarChart2 size={18} />)}
-                                        {renderTabButton('system', 'Sistem', <SettingsIcon size={18} />)}
-                                        {renderTabButton('publishing', 'Yayınla', <Globe size={18} />)}
-                                    </>
-                                )}
-                            </nav>
+                <div className="editor-main-layout" ref={mainLayoutRef}>
+                    {/* LEFT PANEL: Settings */}
+                    <aside 
+                        className={`editor-left-panel ${isSidebarCollapsed ? 'collapsed' : ''}`} 
+                        style={{ width: isSidebarCollapsed ? '48px' : `${sidebarWidth}px` }}
+                    >
+                        <div className="panel-toggle-tab" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+                            {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+                        </div>
 
-                        <div className="tab-content">
+                        {!isSidebarCollapsed && (
+                            <>
+                                <nav className="editor-tabs vertical">
+                                    {activePhase === 'basics' && renderTabButton('basics', 'Proje Kimliği', <Info size={18} />)}
+                                    {activePhase === 'content' && renderTabButton('concepts', 'Kavram Havuzu', <Database size={18} />)}
+                                    {activePhase === 'rules' && renderTabButton('rules', 'Oyun Dinamiği', <Zap size={18} />)}
+                                    {activePhase === 'design' && renderTabButton('visual', 'Tasarım & Ekranlar', <Palette size={18} />)}
+                                    {activePhase === 'publish' && renderTabButton('publish', 'Yayın Ayarları', <Globe size={18} />)}
+                                </nav>
+
+                                <div className="tab-content">
+                            {isWizardMode && (
+                                <div className="wizard-banner">
+                                    <div className="wizard-banner-top">
+                                        <div>
+                                            <div className="wizard-kicker">Adım Adım Kurulum</div>
+                                            <h3>{wizardSteps[wizardStep].title}</h3>
+                                            <p>{wizardSteps[wizardStep].description}</p>
+                                        </div>
+                                        <button className="wizard-close-btn" onClick={stopWizard}>
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                    <div className="wizard-progress">
+                                        {wizardSteps.map((step, index) => (
+                                            <button
+                                                key={step.title}
+                                                className={`wizard-progress-dot ${index === wizardStep ? 'active' : ''} ${index < wizardStep ? 'done' : ''}`}
+                                                onClick={() => goToWizardStep(index)}
+                                                title={step.title}
+                                            >
+                                                {index + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="wizard-actions">
+                                        <button
+                                            className="wizard-nav-btn"
+                                            onClick={() => goToWizardStep(Math.max(0, wizardStep - 1))}
+                                            disabled={wizardStep === 0}
+                                        >
+                                            Geri
+                                        </button>
+                                        <button
+                                            className="wizard-nav-btn primary"
+                                            onClick={() => {
+                                                if (wizardStep === wizardSteps.length - 1) {
+                                                    stopWizard();
+                                                    return;
+                                                }
+                                                goToWizardStep(wizardStep + 1);
+                                            }}
+                                        >
+                                            {wizardStep === wizardSteps.length - 1 ? 'Tamamla' : 'Sonraki Adım'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             {activePhase === 'basics' && (
                                 <div className="basics-container">
                                     <div className="settings-group">
@@ -567,68 +809,74 @@ export const LevelEditor: React.FC = () => {
                                     {project.data.levels.map((lvl, idx) => {
                                         const isLevelOpen = selectedLevelIndex === idx;
                                         return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
+                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`}>
+                                                <div className="level-accordion-header" onClick={() => setSelectedLevelIndex(idx)}>
+                                                    <div className="header-left">
+                                                        <span className="lvl-badge">{idx + 1}</span>
+                                                        <strong>{lvl.title}</strong>
                                                     </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
+                                                    <div className="header-right">
+                                                        <span className="count-tag">{lvl.correct_concepts.length} Doğru</span>
+                                                        <span className="count-tag wrong">{lvl.wrong_concepts.length} Yanlış</span>
+                                                        <ChevronDown size={18} />
+                                                    </div>
                                                 </div>
 
                                                 {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
-                                                        <div className="search-box" style={{ marginBottom: '16px' }}>
+                                                    <div className="accordion-body">
+                                                        <div className="settings-group">
+                                                            <label>Öğrenme Kazanımı (Açıklama)</label>
                                                             <input 
-                                                                placeholder={`${lvl.title} kavramlarında ara...`} 
-                                                                value={conceptSearch} 
-                                                                onChange={e => setConceptSearch(e.target.value)}
-                                                                style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-input)' }}
+                                                                placeholder="Bu seviyede öğrenci neyi öğrenecek?" 
+                                                                value={lvl.learning_goal || ''} 
+                                                                onChange={e => updateCurrentLevel({ learning_goal: e.target.value })} 
                                                             />
                                                         </div>
 
-                                                        <div className="concept-section">
-                                                            <h4>Doğru Kavramlar</h4>
-                                                            {lvl.correct_concepts.filter(c => c.text.toLowerCase().includes(conceptSearch.toLowerCase())).map((c, i) => (
-                                                                <div key={i} className="concept-row">
-                                                                    <input value={c.text} onChange={e => {
-                                                                        const newList = [...lvl.correct_concepts];
-                                                                        newList[i].text = e.target.value;
-                                                                        updateCurrentLevel({ correct_concepts: newList });
-                                                                    }} placeholder="Kavram metni" style={{ flex: 1 }} />
-                                                                    <button onClick={() => {
-                                                                        const newList = lvl.correct_concepts.filter((_, conceptIdx) => conceptIdx !== i);
-                                                                        updateCurrentLevel({ correct_concepts: newList });
-                                                                    }}><Trash2 size={14} /></button>
+                                                        <div className="grid-2">
+                                                            <div className="concept-card success">
+                                                                <div className="card-header">
+                                                                    <h4>✅ Doğru Kavramlar</h4>
+                                                                    <button onClick={() => openBulkConceptModal(idx, 'correct')}>Toplu Giriş</button>
                                                                 </div>
-                                                            ))}
-                                                            <button className="btn-small" onClick={() => updateCurrentLevel({ correct_concepts: [...lvl.correct_concepts, { text: '', category: lvl.targets[0]?.category || 'A', weight: 1 }] })}>
-                                                                + Ekle
-                                                            </button>
-                                                        </div>
+                                                                <div className="concept-rows">
+                                                                    {lvl.correct_concepts.map((c, i) => (
+                                                                        <div key={i} className="concept-input-row">
+                                                                            <input value={c.text} onChange={e => {
+                                                                                const newList = [...lvl.correct_concepts];
+                                                                                newList[i].text = e.target.value;
+                                                                                updateCurrentLevel({ correct_concepts: newList });
+                                                                            }} />
+                                                                            <button onClick={() => {
+                                                                                updateCurrentLevel({ correct_concepts: lvl.correct_concepts.filter((_, ci) => ci !== i) });
+                                                                            }}><Trash2 size={14} /></button>
+                                                                        </div>
+                                                                    ))}
+                                                                    <button className="btn-add-concept" onClick={() => updateCurrentLevel({ correct_concepts: [...lvl.correct_concepts, { text: '', weight: 1 }] })}>+ Ekle</button>
+                                                                </div>
+                                                            </div>
 
-                                                        <div className="concept-section" style={{ marginTop: '16px' }}>
-                                                            <h4>Yanlış Kavramlar</h4>
-                                                            {lvl.wrong_concepts.filter(c => c.text.toLowerCase().includes(conceptSearch.toLowerCase())).map((c, i) => (
-                                                                <div key={i} className="concept-row">
-                                                                    <input value={c.text} onChange={e => {
-                                                                        const newList = [...lvl.wrong_concepts];
-                                                                        newList[i].text = e.target.value;
-                                                                        updateCurrentLevel({ wrong_concepts: newList });
-                                                                    }} placeholder="Kavram metni" style={{ flex: 1 }} />
-                                                                    <button onClick={() => {
-                                                                        const newList = lvl.wrong_concepts.filter((_, conceptIdx) => conceptIdx !== i);
-                                                                        updateCurrentLevel({ wrong_concepts: newList });
-                                                                    }}><Trash2 size={14} /></button>
+                                                            <div className="concept-card danger">
+                                                                <div className="card-header">
+                                                                    <h4>❌ Yanlış Kavramlar</h4>
+                                                                    <button onClick={() => openBulkConceptModal(idx, 'wrong')}>Toplu Giriş</button>
                                                                 </div>
-                                                            ))}
-                                                            <button className="btn-small" onClick={() => updateCurrentLevel({ wrong_concepts: [...lvl.wrong_concepts, { text: '', category: 'Wrong', weight: 1 }] })}>
-                                                                + Ekle
-                                                            </button>
+                                                                <div className="concept-rows">
+                                                                    {lvl.wrong_concepts.map((c, i) => (
+                                                                        <div key={i} className="concept-input-row">
+                                                                            <input value={c.text} onChange={e => {
+                                                                                const newList = [...lvl.wrong_concepts];
+                                                                                newList[i].text = e.target.value;
+                                                                                updateCurrentLevel({ wrong_concepts: newList });
+                                                                            }} />
+                                                                            <button onClick={() => {
+                                                                                updateCurrentLevel({ wrong_concepts: lvl.wrong_concepts.filter((_, ci) => ci !== i) });
+                                                                            }}><Trash2 size={14} /></button>
+                                                                        </div>
+                                                                    ))}
+                                                                    <button className="btn-add-concept" onClick={() => updateCurrentLevel({ wrong_concepts: [...lvl.wrong_concepts, { text: '', weight: 1 }] })}>+ Ekle</button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 )}
@@ -639,326 +887,6 @@ export const LevelEditor: React.FC = () => {
                             )}
 
                             {activeTab === 'visual' && (
-                                <div className="level-accordions-container">
-                                    {project.data.levels.map((lvl, idx) => {
-                                        const isLevelOpen = selectedLevelIndex === idx;
-                                        return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
-                                                    </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
-                                                </div>
-
-                                                {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
-                                                        <AssetPicker 
-                                                            type="background" 
-                                                            label="Arka Plan Görseli" 
-                                                            value={lvl.background} 
-                                                            onChange={val => updateCurrentLevel({ background: val })} 
-                                                        />
-
-                                                        <AssetPicker 
-                                                            type="spritesheet" 
-                                                            label="Oyuncu Karakteri (Sprite)" 
-                                                            value={lvl.config.player_image || ''} 
-                                                            onChange={val => updateCurrentLevel({ config: { ...lvl.config, player_image: val } })} 
-                                                        />
-
-                                                        <div className="settings-group">
-                                                            <label>Doğru Efekti</label>
-                                                            <select value={lvl.effect_correct || 'sparkle'} onChange={e => updateCurrentLevel({ effect_correct: e.target.value })}>
-                                                                <option value="sparkle">Parlamaz</option>
-                                                                <option value="glow">Işıma</option>
-                                                                <option value="pop">Büyüme</option>
-                                                            </select>
-                                                        </div>
-
-                                                        <div className="settings-group">
-                                                            <label>Hata Efekti</label>
-                                                            <select value={lvl.effect_wrong || 'shake'} onChange={e => updateCurrentLevel({ effect_wrong: e.target.value })}>
-                                                                <option value="shake">Sarsıntı</option>
-                                                                <option value="tint">Kızarma</option>
-                                                                <option value="fade">Kararma</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {activeTab === 'audio' && (
-                                <div className="level-accordions-container">
-                                    {project.data.levels.map((lvl, idx) => {
-                                        const isLevelOpen = selectedLevelIndex === idx;
-                                        return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
-                                                    </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
-                                                </div>
-
-                                                {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
-                                                        <AssetPicker 
-                                                            type="music" 
-                                                            label="Seviye Müziği" 
-                                                            value={lvl.music_url || ''} 
-                                                            onChange={val => updateCurrentLevel({ music_url: val })} 
-                                                        />
-
-                                                        <AssetPicker 
-                                                            type="sound" 
-                                                            label="Doğru Yakalama Sesi" 
-                                                            value={lvl.config.sound_correct || ''} 
-                                                            onChange={val => updateCurrentLevel({ config: { ...lvl.config, sound_correct: val } })} 
-                                                        />
-
-                                                        <AssetPicker 
-                                                            type="sound" 
-                                                            label="Hata Ses Efekti" 
-                                                            value={lvl.config.sound_wrong || ''} 
-                                                            onChange={val => updateCurrentLevel({ config: { ...lvl.config, sound_wrong: val } })} 
-                                                        />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {activeTab === 'gameplay' && (
-                                <div className="level-accordions-container">
-                                    {project.data.levels.map((lvl, idx) => {
-                                        const isLevelOpen = selectedLevelIndex === idx;
-                                        return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
-                                                    </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
-                                                </div>
-
-                                                {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
-                                                        <label>Süre (Saniye)</label>
-                                                        <div className="slider-input">
-                                                            <input type="range" min="10" max="300" step="10" value={lvl.duration} onChange={e => updateCurrentLevel({ duration: parseInt(e.target.value) })} />
-                                                            <input type="number" value={lvl.duration} onChange={e => updateCurrentLevel({ duration: parseInt(e.target.value) })} />
-                                                        </div>
-
-                                                        <label>Nesne Üretim Hızı (ms)</label>
-                                                        <div className="slider-input">
-                                                            <input type="range" min="500" max="5000" step="100" value={lvl.config.spawnRate} onChange={e => updateCurrentLevel({ config: { ...lvl.config, spawnRate: parseInt(e.target.value) } })} />
-                                                            <input type="number" value={lvl.config.spawnRate} onChange={e => updateCurrentLevel({ config: { ...lvl.config, spawnRate: parseInt(e.target.value) } })} />
-                                                        </div>
-
-                                                        <label>Düşme Hızı</label>
-                                                        <div className="slider-input">
-                                                            <input type="range" min="50" max="1000" step="50" value={lvl.config.itemSpeed} onChange={e => updateCurrentLevel({ config: { ...lvl.config, itemSpeed: parseInt(e.target.value) } })} />
-                                                            <input type="number" value={lvl.config.itemSpeed} onChange={e => updateCurrentLevel({ config: { ...lvl.config, itemSpeed: parseInt(e.target.value) } })} />
-                                                        </div>
-
-                                                        <label>Yerçekimi</label>
-                                                        <div className="slider-input">
-                                                            <input type="range" min="0" max="1000" step="50" value={lvl.config.gravityY} onChange={e => updateCurrentLevel({ config: { ...lvl.config, gravityY: parseInt(e.target.value) } })} />
-                                                            <input type="number" value={lvl.config.gravityY} onChange={e => updateCurrentLevel({ config: { ...lvl.config, gravityY: parseInt(e.target.value) } })} />
-                                                        </div>
-
-                                                        <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                                                                <input type="checkbox" checked={lvl.config.rotation_enabled} onChange={e => updateCurrentLevel({ config: { ...lvl.config, rotation_enabled: e.target.checked } })} />
-                                                                Nesne Dönüşü Aktif
-                                                            </label>
-                                                        </div>
-
-                                                        {lvl.config.rotation_enabled && (
-                                                            <>
-                                                                <label>Dönüş Hızı</label>
-                                                                <div className="slider-input">
-                                                                    <input type="range" min="1" max="10" step="1" value={lvl.config.rotation_speed || 3} onChange={e => updateCurrentLevel({ config: { ...lvl.config, rotation_speed: parseInt(e.target.value) } })} />
-                                                                    <input type="number" value={lvl.config.rotation_speed || 3} onChange={e => updateCurrentLevel({ config: { ...lvl.config, rotation_speed: parseInt(e.target.value) } })} />
-                                                                </div>
-                                                            </>
-                                                        )}
-
-                                                        <label>Maksimum Hata Sayısı</label>
-                                                        <div className="slider-input">
-                                                            <input type="range" min="1" max="10" step="1" value={lvl.max_errors || 3} onChange={e => updateCurrentLevel({ max_errors: parseInt(e.target.value) })} />
-                                                            <input type="number" value={lvl.max_errors || 3} onChange={e => updateCurrentLevel({ max_errors: parseInt(e.target.value) })} />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {activeTab === 'scoring' && (
-                                <div className="level-accordions-container">
-                                    {project.data.levels.map((lvl, idx) => {
-                                        const isLevelOpen = selectedLevelIndex === idx;
-                                        return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
-                                                    </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
-                                                </div>
-
-                                                {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
-                                                        <div className="settings-group">
-                                                            <label>Hedef Skor</label>
-                                                            <div className="slider-input">
-                                                                <input type="range" min="10" max="1000" step="10" value={lvl.target_score} onChange={e => updateCurrentLevel({ target_score: parseInt(e.target.value) })} />
-                                                                <input type="number" value={lvl.target_score} onChange={e => updateCurrentLevel({ target_score: parseInt(e.target.value) })} />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="settings-group">
-                                                            <label>Başarı Yüzdesi (%)</label>
-                                                            <div className="slider-input">
-                                                                <input type="range" min="10" max="100" step="5" value={lvl.success_percentage} onChange={e => updateCurrentLevel({ success_percentage: parseInt(e.target.value) })} />
-                                                                <input type="number" value={lvl.success_percentage} onChange={e => updateCurrentLevel({ success_percentage: parseInt(e.target.value) })} />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="grid-2" style={{ marginTop: '16px' }}>
-                                                            <div className="settings-group">
-                                                                <label>Doğru Puanı</label>
-                                                                <input type="number" value={lvl.config.points_correct || 10} onChange={e => updateCurrentLevel({ config: { ...lvl.config, points_correct: parseInt(e.target.value) } })} />
-                                                            </div>
-                                                            <div className="settings-group">
-                                                                <label>Hata Cezası</label>
-                                                                <input type="number" value={lvl.config.points_wrong || 5} onChange={e => updateCurrentLevel({ config: { ...lvl.config, points_wrong: parseInt(e.target.value) } })} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {activeTab === 'system' && (
-                                <div className="system-settings">
-                                    <h3>Genel Sistem Ayarları</h3>
-                                    
-                                    <div className="settings-group" style={{ gap: '4px', marginBottom: '24px' }}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.03)', borderRadius: '10px', transition: 'all 0.2s', border: '1px solid var(--border-color)' }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={project.data.settings.showLeaderboard} 
-                                                onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, showLeaderboard: e.target.checked}}})} 
-                                                style={{ width: '18px', height: '18px', margin: 0, accentColor: 'var(--primary-color)' }}
-                                            />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Liderlik Tablosunu Göster</span>
-                                        </label>
-
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.03)', borderRadius: '10px', transition: 'all 0.2s', border: '1px solid var(--border-color)' }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={project.data.settings.allowRetries} 
-                                                onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, allowRetries: e.target.checked}}})} 
-                                                style={{ width: '18px', height: '18px', margin: 0, accentColor: 'var(--primary-color)' }}
-                                            />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Tekrar Denemeye İzin Ver</span>
-                                        </label>
-                                    </div>
-
-                                    <div className="settings-group">
-                                        <label>Oyun Dili</label>
-                                        <select value={project.language} onChange={e => setProject({...project, language: e.target.value})}>
-                                            <option value="tr">Türkçe</option>
-                                            <option value="en">English</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="settings-group">
-                                        <label>Ekran Oranı (Varsayılan)</label>
-                                        <select value={currentLevel.config.canvas_ratio || '16:9'} onChange={e => updateCurrentLevel({ config: { ...currentLevel.config, canvas_ratio: e.target.value as any } })}>
-                                            <option value="16:9">16:9 (Geniş)</option>
-                                            <option value="4:3">4:3 (Standart)</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="settings-group">
-                                        <label>Başlangıç Mesajı (Global)</label>
-                                        <input value={project.data.settings.initial_message || ''} onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, initial_message: e.target.value}}})} />
-                                    </div>
-
-                                    <div className="settings-group">
-                                        <label>Bitiş Mesajı (Global)</label>
-                                        <input value={project.data.settings.completion_message || ''} onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, completion_message: e.target.value}}})} />
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'publishing' && (
-                                <div className="publishing-settings">
-                                    <h3>Yayınlama Ayarları</h3>
-                                    
-                                    <div className="settings-group">
-                                        <label>Görünürlük</label>
-                                        <select value={project.visibility} onChange={e => setProject({...project, visibility: e.target.value as any})}>
-                                            <option value="public">Herkese Açık</option>
-                                            <option value="private">Özel</option>
-                                            <option value="school">Okul İçi</option>
-                                            <option value="class">Sınıf İçi</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="settings-group">
-                                        <label>Proje Durumu</label>
-                                        <select value={project.status} onChange={e => setProject({...project, status: e.target.value as any})}>
-                                            <option value="draft">Taslak</option>
-                                            <option value="published">Yayında</option>
-                                            <option value="archived">Arşivlendi</option>
-                                        </select>
-                                    </div>
-
-                                    <div className="info-box" style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '12px', borderRadius: '8px', marginTop: '20px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                                        <p style={{ fontSize: '0.75rem', margin: 0, color: 'var(--text-primary)' }}>
-                                            <strong>Not:</strong> Yayına alınan projeler kütüphanede tüm kullanıcılar tarafından görülebilir ve oynanabilir.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab === 'screens' && (
                                 <div className="level-accordions-container">
                                     {/* GLOBAL SCREENS ACCORDION */}
                                     <div className="level-accordion-item open" style={{ marginBottom: '24px', border: '2px solid var(--primary-color)', borderRadius: '12px', overflow: 'hidden' }}>
@@ -996,71 +924,18 @@ export const LevelEditor: React.FC = () => {
                                                             </div>
                                                             {isOpen && (
                                                                 <div className="accordion-content">
-                                                                    <div className="settings-group">
-                                                                        <label>Başlık</label>
-                                                                        <input 
-                                                                            value={screenData.title}
-                                                                            onChange={e => setProject({
-                                                                                ...project,
-                                                                                data: {
-                                                                                    ...project.data,
-                                                                                    common_screens: {
-                                                                                        ...project.data.common_screens!,
-                                                                                        [s.id]: { ...screenData, title: e.target.value }
-                                                                                    }
-                                                                                }
-                                                                            })}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="settings-group">
-                                                                        <label>Açıklama</label>
-                                                                        <textarea 
-                                                                            rows={3}
-                                                                            value={screenData.description}
-                                                                            onChange={e => setProject({
-                                                                                ...project,
-                                                                                data: {
-                                                                                    ...project.data,
-                                                                                    common_screens: {
-                                                                                        ...project.data.common_screens!,
-                                                                                        [s.id]: { ...screenData, description: e.target.value }
-                                                                                    }
-                                                                                }
-                                                                            })}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="settings-group">
-                                                                        <label>Buton Metni</label>
-                                                                        <input 
-                                                                            value={screenData.buttonText}
-                                                                            onChange={e => setProject({
-                                                                                ...project,
-                                                                                data: {
-                                                                                    ...project.data,
-                                                                                    common_screens: {
-                                                                                        ...project.data.common_screens!,
-                                                                                        [s.id]: { ...screenData, buttonText: e.target.value }
-                                                                                    }
-                                                                                }
-                                                                            })}
-                                                                        />
-                                                                    </div>
-                                                                    <div className="settings-group">
-                                                                        <AssetPicker 
-                                                                            type="background" 
-                                                                            label="Özel Arka Plan" 
-                                                                            value={(screenData as any).background || ''} 
-                                                                            onChange={val => setProject({
-                                                                                ...project,
-                                                                                data: {
-                                                                                    ...project.data,
-                                                                                    common_screens: {
-                                                                                        ...project.data.common_screens!,
-                                                                                        [s.id]: { ...screenData, background: val }
-                                                                                    }
-                                                                                }
-                                                                            })} 
-                                                                        />
+                                                                    <div className="grid-2">
+                                                                        <div className="settings-group">
+                                                                            <label>Başlık</label>
+                                                                            <input value={screenData.title} onChange={e => setProject({...project, data: {...project.data, common_screens: {...project.data.common_screens!, [s.id]: {...screenData, title: e.target.value}}}})} />
+                                                                            <label>Açıklama</label>
+                                                                            <textarea rows={2} value={screenData.description} onChange={e => setProject({...project, data: {...project.data, common_screens: {...project.data.common_screens!, [s.id]: {...screenData, description: e.target.value}}}})} />
+                                                                        </div>
+                                                                        <div className="settings-group">
+                                                                            <label>Buton Metni</label>
+                                                                            <input value={screenData.buttonText} onChange={e => setProject({...project, data: {...project.data, common_screens: {...project.data.common_screens!, [s.id]: {...screenData, buttonText: e.target.value}}}})} />
+                                                                            <AssetPicker type="background" label="Özel Arka Plan" value={(screenData as any).background || ''} onChange={val => setProject({...project, data: {...project.data, common_screens: {...project.data.common_screens!, [s.id]: {...screenData, background: val}}}})} />
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             )}
@@ -1072,54 +947,67 @@ export const LevelEditor: React.FC = () => {
                                     </div>
 
                                     {/* LEVEL SPECIFIC ACCORDIONS */}
-                                    <h4 style={{ fontSize: '0.8rem', margin: '0 0 12px 4px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Seviye Ekranları</h4>
+                                    <h4 style={{ fontSize: '0.8rem', margin: '0 0 12px 4px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Seviye Tasarımı & Ekranları</h4>
                                     {project.data.levels.map((lvl, idx) => {
                                         const isLevelOpen = selectedLevelIndex === idx;
                                         return (
-                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`} style={{ marginBottom: '12px', border: '2px solid', borderColor: isLevelOpen ? 'var(--primary-color)' : 'var(--border-color)', borderRadius: '12px', overflow: 'hidden' }}>
-                                                <div 
-                                                    className="level-accordion-header" 
-                                                    onClick={() => setSelectedLevelIndex(idx)}
-                                                    style={{ padding: '12px 16px', background: isLevelOpen ? 'rgba(var(--primary-rgb), 0.05)' : 'var(--bg-surface)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                                                >
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        <span style={{ background: 'var(--primary-color)', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>{idx + 1}</span>
-                                                        <strong style={{ fontSize: '0.9rem' }}>{lvl.title}</strong>
+                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`}>
+                                                <div className="level-accordion-header" onClick={() => setSelectedLevelIndex(idx)}>
+                                                    <div className="header-left">
+                                                        <span className="lvl-badge">{idx + 1}</span>
+                                                        <strong>{lvl.title}</strong>
                                                     </div>
-                                                    <ChevronDown size={18} style={{ transform: isLevelOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
+                                                    <ChevronDown size={18} />
                                                 </div>
 
                                                 {isLevelOpen && (
-                                                    <div style={{ padding: '16px', background: 'var(--bg-main)' }}>
+                                                    <div className="accordion-body">
                                                         <div className="screens-accordion">
-                                                            {/* Oyun Ekranı (Gameplay Media) */}
+                                                            {/* 1. GÖRÜNÜM & MEDYA */}
                                                             <div className={`accordion-item ${activeScreen === 'gameplay' ? 'open' : ''}`}>
-                                                                <div className="accordion-header" onClick={() => setActiveScreen(activeScreen === 'gameplay' ? null : 'gameplay' as any)}>
-                                                                    <div className="header-left"><Play size={18} /> <span>Oyun Ekranı</span></div>
+                                                                <div className="accordion-header" onClick={() => setActiveScreen(activeScreen === 'gameplay' ? null : 'gameplay')}>
+                                                                    <div className="header-left"><Palette size={18} /> <span>Görünüm & Medya</span></div>
                                                                     <ChevronDown size={16} className={`arrow ${activeScreen === 'gameplay' ? 'up' : ''}`} />
                                                                 </div>
                                                                 {activeScreen === 'gameplay' && (
                                                                     <div className="accordion-content">
-                                                                        <div className="settings-group">
-                                                                            <AssetPicker 
-                                                                                type="background" 
-                                                                                label="Oyun Arka Planı" 
-                                                                                value={lvl.background} 
-                                                                                onChange={val => updateCurrentLevel({ background: val })} 
-                                                                            />
+                                                                        <div className="grid-2">
+                                                                            <div className="settings-card">
+                                                                                <h4>🖼️ Görseller</h4>
+                                                                                <AssetPicker type="background" label="Arka Plan" value={lvl.background} onChange={val => updateCurrentLevel({ background: val })} />
+                                                                                <AssetPicker type="spritesheet" label="Karakter / Sepet" value={lvl.config.player_image || ''} onChange={val => updateCurrentLevel({ config: { ...lvl.config, player_image: val } })} />
+                                                                            </div>
+                                                                            <div className="settings-card">
+                                                                                <h4>🎵 Sesler</h4>
+                                                                                <AssetPicker type="music" label="Arka Plan Müziği" value={lvl.music_url || ''} onChange={val => updateCurrentLevel({ music_url: val })} />
+                                                                                <div className="grid-2">
+                                                                                    <AssetPicker type="sound" label="Doğru Sesi" value={lvl.config.sound_correct || ''} onChange={val => updateCurrentLevel({ config: { ...lvl.config, sound_correct: val } })} />
+                                                                                    <AssetPicker type="sound" label="Hata Sesi" value={lvl.config.sound_wrong || ''} onChange={val => updateCurrentLevel({ config: { ...lvl.config, sound_wrong: val } })} />
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="settings-group">
-                                                                            <AssetPicker 
-                                                                                type="music" 
-                                                                                label="Oyun Müziği" 
-                                                                                value={lvl.music_url || ''} 
-                                                                                onChange={val => updateCurrentLevel({ music_url: val })} 
-                                                                            />
+                                                                        <div className="grid-2" style={{ marginTop: '12px' }}>
+                                                                            <div className="settings-group">
+                                                                                <label>Doğru Yakalama Efekti</label>
+                                                                                <select value={lvl.effect_correct || 'sparkle'} onChange={e => updateCurrentLevel({ effect_correct: e.target.value })}>
+                                                                                    <option value="sparkle">Parlama (Sparkle)</option>
+                                                                                    <option value="glow">Işıma (Glow)</option>
+                                                                                    <option value="pop">Büyüme (Pop)</option>
+                                                                                </select>
+                                                                            </div>
+                                                                            <div className="settings-group">
+                                                                                <label>Hata Efekti</label>
+                                                                                <select value={lvl.effect_wrong || 'shake'} onChange={e => updateCurrentLevel({ effect_wrong: e.target.value })}>
+                                                                                    <option value="shake">Sarsıntı (Shake)</option>
+                                                                                    <option value="tint">Flaş (Flash)</option>
+                                                                                </select>
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 )}
                                                             </div>
 
+                                                            {/* 2. BİLGİ EKRANLARI */}
                                                             {[
                                                                 { id: 'infoStart', label: 'Başlangıç Bilgi Ekranı', icon: <Info size={18} /> },
                                                                 { id: 'infoEnd', label: 'Bitiş Bilgi Ekranı', icon: <Flag size={18} /> }
@@ -1130,81 +1018,48 @@ export const LevelEditor: React.FC = () => {
                                                                 
                                                                 return (
                                                                     <div key={s.id} className={`accordion-item ${isOpen ? 'open' : ''}`}>
-                                                                        <div 
-                                                                            className="accordion-header" 
-                                                                            onClick={() => setActiveScreen(isOpen ? null : s.id as any)}
-                                                                        >
-                                                                            <div className="header-left">
-                                                                                {s.icon}
-                                                                                <span>{s.label}</span>
-                                                                            </div>
+                                                                        <div className="accordion-header" onClick={() => setActiveScreen(isOpen ? null : s.id as any)}>
+                                                                            <div className="header-left">{s.icon} <span>{s.label}</span></div>
                                                                             <ChevronDown size={16} className={`arrow ${isOpen ? 'up' : ''}`} />
                                                                         </div>
-                                                                        
                                                                         {isOpen && (
                                                                             <div className="accordion-content">
                                                                                 <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
-                                                                                    <input 
-                                                                                        type="checkbox" 
-                                                                                        checked={screenData.enabled} 
-                                                                                        onChange={e => {
-                                                                                            const newScreens = { ...lvl.screens };
-                                                                                            (newScreens as any)[s.id].enabled = e.target.checked;
-                                                                                            updateCurrentLevel({ screens: newScreens });
-                                                                                        }}
-                                                                                        style={{ width: '18px', height: '18px', margin: 0 }}
-                                                                                    />
+                                                                                    <input type="checkbox" checked={screenData.enabled} onChange={e => {
+                                                                                        const newScreens = { ...lvl.screens };
+                                                                                        (newScreens as any)[s.id].enabled = e.target.checked;
+                                                                                        updateCurrentLevel({ screens: newScreens });
+                                                                                    }} />
                                                                                     <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Bu ekranı aktifleştir</span>
                                                                                 </div>
-
-                                                                                <div className="settings-group">
-                                                                                    <label>Başlık</label>
-                                                                                    <input 
-                                                                                        value={screenData.title}
-                                                                                        onChange={e => {
+                                                                                <div className="grid-2">
+                                                                                    <div className="settings-group">
+                                                                                        <label>Başlık</label>
+                                                                                        <input value={screenData.title} onChange={e => {
                                                                                             const newScreens = { ...lvl.screens };
                                                                                             (newScreens as any)[s.id].title = e.target.value;
                                                                                             updateCurrentLevel({ screens: newScreens });
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-
-                                                                                <div className="settings-group">
-                                                                                    <label>Açıklama / Mesaj</label>
-                                                                                    <textarea 
-                                                                                        rows={3}
-                                                                                        value={screenData.description}
-                                                                                        onChange={e => {
+                                                                                        }} />
+                                                                                        <label>Açıklama</label>
+                                                                                        <textarea rows={2} value={screenData.description} onChange={e => {
                                                                                             const newScreens = { ...lvl.screens };
                                                                                             (newScreens as any)[s.id].description = e.target.value;
                                                                                             updateCurrentLevel({ screens: newScreens });
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-
-                                                                                <div className="settings-group">
-                                                                                    <label>Buton Metni</label>
-                                                                                    <input 
-                                                                                        value={screenData.buttonText}
-                                                                                        onChange={e => {
+                                                                                        }} />
+                                                                                    </div>
+                                                                                    <div className="settings-group">
+                                                                                        <label>Buton Metni</label>
+                                                                                        <input value={screenData.buttonText} onChange={e => {
                                                                                             const newScreens = { ...lvl.screens };
                                                                                             (newScreens as any)[s.id].buttonText = e.target.value;
                                                                                             updateCurrentLevel({ screens: newScreens });
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-
-                                                                                <div className="settings-group">
-                                                                                    <AssetPicker 
-                                                                                        type="background" 
-                                                                                        label="Özel Arka Plan" 
-                                                                                        value={screenData.background || ''} 
-                                                                                        onChange={val => {
+                                                                                        }} />
+                                                                                        <AssetPicker type="background" label="Özel Arka Plan" value={screenData.background || ''} onChange={val => {
                                                                                             const newScreens = { ...lvl.screens };
                                                                                             (newScreens as any)[s.id].background = val;
                                                                                             updateCurrentLevel({ screens: newScreens });
-                                                                                        }} 
-                                                                                    />
+                                                                                        }} />
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         )}
@@ -1219,20 +1074,194 @@ export const LevelEditor: React.FC = () => {
                                     })}
                                 </div>
                             )}
+
+                            {activeTab === 'rules' && (
+                                <div className="level-accordions-container">
+                                    {project.data.levels.map((lvl, idx) => {
+                                        const isLevelOpen = selectedLevelIndex === idx;
+                                        return (
+                                            <div key={lvl.id} className={`level-accordion-item ${isLevelOpen ? 'open' : ''}`}>
+                                                <div className="level-accordion-header" onClick={() => setSelectedLevelIndex(idx)}>
+                                                    <div className="header-left">
+                                                        <span className="lvl-badge">{idx + 1}</span>
+                                                        <strong>{lvl.title} - Kurallar</strong>
+                                                    </div>
+                                                    <ChevronDown size={18} />
+                                                </div>
+
+                                                {isLevelOpen && (
+                                                    <div className="accordion-body">
+                                                        <div className="grid-2">
+                                                            <div className="settings-card">
+                                                                <h4>⚖️ Zorluk & Akış</h4>
+                                                                <div className="settings-group">
+                                                                    <label>Seviye Süresi (Saniye)</label>
+                                                                    <div className="slider-input">
+                                                                        <input type="range" min="10" max="300" step="10" value={lvl.duration} onChange={e => updateCurrentLevel({ duration: parseInt(e.target.value) })} />
+                                                                        <span className="val-preview">{lvl.duration}s</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="settings-group">
+                                                                    <label>Düşme Hızı</label>
+                                                                    <div className="slider-input">
+                                                                        <input type="range" min="50" max="800" step="50" value={lvl.config.itemSpeed} onChange={e => updateCurrentLevel({ config: { ...lvl.config, itemSpeed: parseInt(e.target.value) } })} />
+                                                                        <span className="val-preview">{lvl.config.itemSpeed}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="settings-group">
+                                                                    <label>Maksimum Hata Hakkı</label>
+                                                                    <div className="slider-input">
+                                                                        <input type="range" min="1" max="10" step="1" value={lvl.max_errors || 3} onChange={e => updateCurrentLevel({ max_errors: parseInt(e.target.value) })} />
+                                                                        <span className="val-preview">{lvl.max_errors || 3}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="settings-card">
+                                                                <h4>🎯 Başarı Kriterleri</h4>
+                                                                <div className="settings-group">
+                                                                    <label>Hedef Skor</label>
+                                                                    <div className="slider-input">
+                                                                        <input type="range" min="10" max="1000" step="10" value={lvl.target_score} onChange={e => updateCurrentLevel({ target_score: parseInt(e.target.value) })} />
+                                                                        <span className="val-preview">{lvl.target_score}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="settings-group">
+                                                                    <label>Doğruluk Eşiği (%)</label>
+                                                                    <div className="slider-input">
+                                                                        <input type="range" min="10" max="100" step="5" value={lvl.success_percentage} onChange={e => updateCurrentLevel({ success_percentage: parseInt(e.target.value) })} />
+                                                                        <span className="val-preview">%{lvl.success_percentage}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="grid-2" style={{ marginTop: '12px' }}>
+                                                                    <div className="settings-group">
+                                                                        <label>Doğru Puanı</label>
+                                                                        <input type="number" value={lvl.config.points_correct || 10} onChange={e => updateCurrentLevel({ config: { ...lvl.config, points_correct: parseInt(e.target.value) } })} />
+                                                                    </div>
+                                                                    <div className="settings-group">
+                                                                        <label>Yanlış Cezası</label>
+                                                                        <input type="number" value={lvl.config.points_wrong || 5} onChange={e => updateCurrentLevel({ config: { ...lvl.config, points_wrong: parseInt(e.target.value) } })} />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {activeTab === 'publish' && (
+                                <div className="publish-container">
+                                    <div className="grid-2">
+                                        <div className="settings-group">
+                                            <h3>Sistem & Görünüm</h3>
+                                            <label>Oyun Bilgi Paneli Stili (UI)</label>
+                                            <select 
+                                                value={project.data.settings.ui_style || 'classic'} 
+                                                onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, ui_style: e.target.value as any}}})}
+                                                style={{ border: '1px solid var(--primary-color)', background: 'rgba(var(--primary-rgb), 0.05)' }}
+                                            >
+                                                <option value="classic">Klasik (Üst Bar)</option>
+                                                <option value="modern">Modern (Köşe Kartları)</option>
+                                                <option value="minimal">Minimal (Sadece İkonlar)</option>
+                                                <option value="gaming">Oyuncu (Gelişmiş Panel)</option>
+                                            </select>
+
+                                            <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.03)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={project.data.settings.showLeaderboard} 
+                                                        onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, showLeaderboard: e.target.checked}}})} 
+                                                    />
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Liderlik Tablosunu Göster</span>
+                                                </label>
+
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', padding: '12px', background: 'rgba(0,0,0,0.03)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={project.data.settings.allowRetries} 
+                                                        onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, allowRetries: e.target.checked}}})} 
+                                                    />
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Tekrar Denemeye İzin Ver</span>
+                                                </label>
+                                            </div>
+
+                                            <label style={{ marginTop: '16px' }}>Bitiş Mesajı (Tebrikler Mesajı)</label>
+                                            <input value={project.data.settings.completion_message || ''} onChange={e => setProject({...project, data: {...project.data, settings: {...project.data.settings, completion_message: e.target.value}}})} />
+                                        </div>
+
+                                        <div className="settings-group">
+                                            <h3>Yayınlama</h3>
+                                            <label>Görünürlük</label>
+                                            <select value={project.visibility} onChange={e => setProject({...project, visibility: e.target.value as any})}>
+                                                <option value="public">Herkese Açık</option>
+                                                <option value="private">Özel</option>
+                                                <option value="school">Okul İçi</option>
+                                                <option value="class">Sınıf İçi</option>
+                                            </select>
+
+                                            <label>Proje Durumu</label>
+                                            <select value={project.status} onChange={e => setProject({...project, status: e.target.value as any})}>
+                                                <option value="draft">Taslak</option>
+                                                <option value="published">Yayında</option>
+                                                <option value="archived">Arşivlendi</option>
+                                            </select>
+
+                                            <div className="info-box" style={{ background: 'rgba(59, 130, 246, 0.1)', padding: '16px', borderRadius: '12px', marginTop: '24px', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                                                <h4 style={{ margin: '0 0 8px 0', color: '#1d4ed8' }}>Yayınlamaya Hazır mısın?</h4>
+                                                <p style={{ fontSize: '0.8rem', margin: 0, color: 'var(--text-primary)' }}>
+                                                    Tüm seviyeleri kontrol ettiysen ve ayarlarından eminsen oyunu yayınlayabilirsin. 
+                                                    Yayınlanan oyunlar öğrenci panellerinde görünecektir.
+                                                </p>
+                                                <button className="btn-test w-full" style={{ marginTop: '16px', background: '#1d4ed8' }} onClick={() => { setTestMode('all'); setIsTesting(true); }}>
+                                                    <Play size={16} /> Son Kontrol (Önizleme)
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+                        </>
+                        )}
                     </aside>
+
+                    {!isSidebarCollapsed && (
+                        <div className="resize-handle" onMouseDown={startResizing} />
+                    )}
 
                     {/* CENTER PANEL: Live Preview */}
                     <main className="editor-center-panel">
                         <div className="preview-container">
                             <div className="preview-toolbar">
-                                <span>Canlı Önizleme: {currentLevel.title}</span>
+                                <span>
+                                    Canlı Önizleme: {(() => {
+                                        switch (activeScreen) {
+                                            case 'cover':
+                                                return 'Kapak Sayfası';
+                                            case 'victory':
+                                                return 'Zafer Ekranı';
+                                            case 'defeat':
+                                                return 'Yenilgi Ekranı';
+                                            case 'infoStart':
+                                                return `Giriş Ekranı (${currentLevel.title})`;
+                                            case 'infoEnd':
+                                                return `Özet Ekranı (${currentLevel.title})`;
+                                            case 'gameplay':
+                                            default:
+                                                return `Oyun Ekranı (${currentLevel.title})`;
+                                        }
+                                    })()}
+                                </span>
                                 <button onClick={() => { setTestMode('single'); setIsTesting(true); }}>
                                     <Play size={14} /> Seviyeyi Dene
                                 </button>
                             </div>
                             <div className="phaser-preview-placeholder">
-                                {activeTab === 'screens' ? (
+                                {(['cover', 'victory', 'defeat', 'infoStart', 'infoEnd'].includes(activeScreen || '')) ? (
                                     <div className="screen-preview-container" style={{ 
                                         background: (() => {
                                             const isCommon = ['cover', 'victory', 'defeat'].includes(activeScreen || '');
@@ -1287,18 +1316,39 @@ export const LevelEditor: React.FC = () => {
                                         <div className="preview-ui">
                                             <div className="score">Skor: 0</div>
                                             <div className="timer">{Math.floor(currentLevel.duration / 60)}:{(currentLevel.duration % 60).toString().padStart(2, '0')}</div>
+                                            <div className="hearts" style={{ display: 'flex', gap: '2px', background: 'rgba(0,0,0,0.6)', padding: '6px 10px', borderRadius: '8px', fontSize: '0.85rem', color: '#fff', fontWeight: 'bold' }}>
+                                                {'❤️'.repeat(currentLevel.max_errors || 3)}
+                                            </div>
                                         </div>
-                                        <div className="instruction" style={{ top: '60px' }}>{currentLevel.instruction}</div>
+                                        <div className="instruction" style={{ top: '80px' }}>{currentLevel.instruction}</div>
                                         <div className="objects-preview">
                                             {currentLevel.correct_concepts.slice(0, 2).map((c, i) => (
-                                                <div key={i} className="falling-item" style={{ top: `${120 + i * 60}px`, left: `${100 + i * 150}px` }}>{c.text}</div>
+                                                <div key={i} className="falling-item" style={{ 
+                                                    top: `${140 + i * 100}px`, 
+                                                    left: `${25 + i * 40}%`, 
+                                                    borderLeft: '4px solid #10b981' 
+                                                }}>
+                                                    {c.text}
+                                                </div>
+                                            ))}
+                                            {currentLevel.wrong_concepts.slice(0, 1).map((c, i) => (
+                                                <div key={i} className="falling-item" style={{ 
+                                                    top: `${200}px`, 
+                                                    left: '70%', 
+                                                    borderLeft: '4px solid #ef4444' 
+                                                }}>
+                                                    {c.text}
+                                                </div>
                                             ))}
                                         </div>
                                         <div className="player-preview" style={{ 
-                                            background: currentLevel.config.player_image ? `url(${currentLevel.config.player_image}) center/contain no-repeat` : 'white',
-                                            width: '60px',
+                                            background: currentLevel.config.player_image ? `url(${currentLevel.config.player_image}) center/contain no-repeat` : '#6366f1',
+                                            width: '100px',
                                             height: '60px',
-                                            bottom: '20px'
+                                            bottom: '30px',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            borderRadius: '8px'
                                         }}></div>
                                     </div>
                                 )}
@@ -1308,27 +1358,54 @@ export const LevelEditor: React.FC = () => {
 
                     {/* RIGHT PANEL: Info & Checks */}
                     {showSummary && (
-                        <aside className="editor-right-panel">
+                        <aside className={`editor-right-panel ${isSummaryCollapsed ? 'collapsed' : ''}`}>
                             <div className="panel-header">
-                                <Info size={16} /> Durum Özeti
-                            </div>
-                            <div className="summary-list">
-                                <div className="summary-item success">
-                                    <ChevronRight size={14} /> {project.data.levels.length} Seviye Hazır
+                                <div className="panel-header-title">
+                                    <Info size={16} /> {!isSummaryCollapsed && 'Durum Özeti'}
                                 </div>
-                                <div className={`summary-item ${currentLevel.correct_concepts.length > 0 ? 'success' : 'warning'}`}>
-                                    <ChevronRight size={14} /> Kavramlar: {currentLevel.correct_concepts.length} Doğru / {currentLevel.wrong_concepts.length} Yanlış
-                                </div>
-                                <div className="summary-item info">
-                                    <ChevronRight size={14} /> Hedef Skor: {currentLevel.target_score}
-                                </div>
+                                <button
+                                    className="panel-collapse-btn"
+                                    onClick={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
+                                    title={isSummaryCollapsed ? 'Özeti Genişlet' : 'Özeti Daralt'}
+                                >
+                                    {isSummaryCollapsed ? <PanelRightOpen size={16} /> : <PanelRightClose size={16} />}
+                                </button>
                             </div>
-                            
-                            <div className="quick-actions">
-                                <h4>Hızlı Şablonlar</h4>
-                                <button className="btn-template" onClick={applyPhysicalQuantitiesTemplate}>Fiziksel Büyüklükler</button>
-                                <button className="btn-template">Elementler & Bileşikler</button>
-                            </div>
+                            {!isSummaryCollapsed && (
+                                <>
+                                    <div className="summary-list">
+                                        <div className="summary-item success">
+                                            <ChevronRight size={14} /> {project.data.levels.length} Seviye Hazır
+                                        </div>
+                                        <div className={`summary-item ${currentLevel.correct_concepts.length > 0 ? 'success' : 'warning'}`}>
+                                            <ChevronRight size={14} /> Kavramlar: {currentLevel.correct_concepts.length} Doğru / {currentLevel.wrong_concepts.length} Yanlış
+                                        </div>
+                                        <div className="summary-item info">
+                                            <ChevronRight size={14} /> Hedef Skor: {currentLevel.target_score}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="quick-actions">
+                                        <h4>Hızlı Şablonlar</h4>
+                                        <button className="btn-template" onClick={applyPhysicalQuantitiesTemplate}>
+                                            <Zap size={14} /> Fiziksel Büyüklükler
+                                        </button>
+                                        <button className="btn-template" onClick={applyChemistryTemplate}>
+                                            <Beaker size={14} /> Elementler & Bileşikler
+                                        </button>
+                                        <button className="btn-template" onClick={applyMathTemplate}>
+                                            <Hash size={14} /> Asal Sayılar (Matematik)
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                            {isSummaryCollapsed && (
+                                <div className="summary-collapsed-stack">
+                                    <div className="summary-mini-pill">{project.data.levels.length}</div>
+                                    <div className="summary-mini-pill">{currentLevel.correct_concepts.length}/{currentLevel.wrong_concepts.length}</div>
+                                    <div className="summary-mini-pill">{currentLevel.target_score}</div>
+                                </div>
+                            )}
                         </aside>
                     )}
                 </div>
@@ -1337,333 +1414,1019 @@ export const LevelEditor: React.FC = () => {
                 {isTesting && (
                     <div className="test-modal">
                         <div className="modal-content">
-                            <button className="btn-close" onClick={() => setIsTesting(false)}>
-                                <X size={24} /> Kapat
-                            </button>
-                            <GameContainer projectData={project} levelIndex={testMode === 'single' ? selectedLevelIndex : 0} isTestMode={true} />
+                            <GameContainer 
+                                projectData={project} 
+                                levelIndex={testMode === 'single' ? selectedLevelIndex : 0} 
+                                isTestMode={true} 
+                                onClose={() => setIsTesting(false)}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {bulkConceptModal.isOpen && (
+                    <div className="bulk-modal-backdrop" onClick={() => setBulkConceptModal(prev => ({ ...prev, isOpen: false }))}>
+                        <div className="bulk-modal" onClick={(event) => event.stopPropagation()}>
+                            <div className="bulk-modal-header">
+                                <div>
+                                    <div className="wizard-kicker">Toplu Kavram Girişi</div>
+                                    <h3>{bulkConceptModal.conceptType === 'correct' ? 'Doğru Kavramları Ekle' : 'Yanlış Kavramları Ekle'}</h3>
+                                    <p>Her satıra bir kavram yazabilir ya da virgülle ayırabilirsin.</p>
+                                </div>
+                                <button className="wizard-close-btn" onClick={() => setBulkConceptModal(prev => ({ ...prev, isOpen: false }))}>
+                                    <X size={14} />
+                                </button>
+                            </div>
+                            <textarea
+                                className="bulk-textarea"
+                                placeholder="Örn:\nKuvvet\nİvme\nSürtünme"
+                                value={bulkConceptModal.value}
+                                onChange={(event) => setBulkConceptModal(prev => ({ ...prev, value: event.target.value }))}
+                            />
+                            <div className="bulk-modal-actions">
+                                <button className="wizard-nav-btn" onClick={() => setBulkConceptModal(prev => ({ ...prev, isOpen: false }))}>
+                                    Vazgeç
+                                </button>
+                                <button className="wizard-nav-btn primary" onClick={applyBulkConcepts}>
+                                    Kavramları Ekle
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
             </div>
 
             <style>{`
-                .editor-container {
+                .editor-container.editor-ui-scope {
                     height: calc(100vh - 64px);
                     display: flex;
                     flex-direction: column;
                     background: var(--bg-main);
                     color: var(--text-primary);
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    overflow: hidden;
+                }
+
+                .editor-ui-scope button, 
+                .editor-ui-scope input, 
+                .editor-ui-scope select, 
+                .editor-ui-scope textarea {
                     font-family: 'Inter', sans-serif;
                 }
 
                 /* Slim Header Styles */
                 .editor-header {
-                    height: 40px;
-                    padding: 0 12px;
-                    background: var(--bg-surface);
-                    border-bottom: 1px solid var(--border-color);
+                    min-height: 64px;
+                    padding: 10px 18px;
+                    background: linear-gradient(180deg, rgba(var(--bg-surface-rgb), 1), rgba(var(--bg-surface-rgb), 0.94));
+                    border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    gap: 16px;
+                    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
                     z-index: 100;
                 }
 
-                .header-left { display: flex; align-items: center; gap: 20px; }
-                
-                .project-meta { display: flex; align-items: center; gap: 12px; }
-                .project-meta h1 { 
-                    margin: 0; 
-                    font-size: 1rem; 
-                    font-weight: 700; 
-                    max-width: 200px;
+                .header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 14px;
+                    min-width: 0;
+                    flex-wrap: wrap;
+                }
+                .project-meta {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                }
+                .project-meta h1 {
+                    font-size: 1rem;
+                    font-weight: 800;
+                    margin: 0;
+                    color: var(--text-primary);
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    max-width: 280px;
+                }
+                .status-badge {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 6px 10px;
+                    border-radius: 999px;
+                    background: rgba(var(--primary-rgb), 0.1);
+                    color: var(--primary-color);
+                    font-size: 0.72rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                }
+                .phase-nav {
+                    display: flex;
+                    gap: 6px;
+                    flex-wrap: wrap;
+                    background: rgba(var(--primary-rgb), 0.06);
+                    padding: 6px;
+                    border-radius: 14px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.08);
+                }
+                .phase-btn {
+                    padding: 8px 12px;
+                    font-size: 0.76rem;
+                    border-radius: 10px;
+                    border: none;
+                    background: transparent;
+                    cursor: pointer;
+                    color: var(--text-secondary);
+                    transition: all 0.2s ease;
+                    font-weight: 700;
+                }
+                .phase-btn.active {
+                    background: var(--bg-surface);
+                    color: var(--primary-color);
+                    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+                }
+                .header-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+                .btn-save,
+                .btn-test,
+                .btn-wizard,
+                .btn-exit,
+                .btn-icon,
+                .preview-toolbar button {
+                    min-height: 40px;
+                    border-radius: 12px;
+                    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+                }
+                .btn-save {
+                    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+                    color: white;
+                    border: none;
+                    padding: 0 14px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                    font-size: 0.82rem;
+                    box-shadow: 0 10px 24px rgba(var(--primary-rgb), 0.28);
+                }
+                .btn-test {
+                    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+                    color: white;
+                    border: none;
+                    padding: 0 14px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                    font-size: 0.82rem;
+                }
+                .btn-wizard {
+                    background: rgba(var(--primary-rgb), 0.08);
+                    color: var(--primary-color);
+                    border: 1px solid rgba(var(--primary-rgb), 0.16);
+                    padding: 0 14px;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                    font-size: 0.82rem;
+                }
+                .btn-wizard.active {
+                    background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.18), rgba(var(--primary-rgb), 0.08));
+                }
+                .btn-exit {
+                    background: transparent;
+                    color: var(--text-secondary);
+                    border: 1px solid var(--border-color);
+                    width: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                }
+                .btn-icon {
+                    background: var(--bg-surface);
+                    border: 1px solid var(--border-color);
+                    color: var(--text-secondary);
+                    width: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                }
+                .btn-icon.active { color: var(--primary-color); border-color: rgba(var(--primary-rgb), 0.4); }
+                .btn-save:hover, .btn-test:hover, .btn-exit:hover, .btn-icon:hover, .preview-toolbar button:hover {
+                    transform: translateY(-1px);
+                }
+
+                .editor-main-layout { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+                .editor-left-panel {
+                    background:
+                        linear-gradient(180deg, rgba(var(--bg-surface-rgb), 0.98), rgba(var(--bg-surface-rgb), 0.93)),
+                        radial-gradient(circle at top left, rgba(var(--primary-rgb), 0.08), transparent 35%);
+                    border-right: 1px solid rgba(var(--primary-rgb), 0.14);
+                    display: flex;
+                    flex-direction: column;
+                    position: relative;
+                    transition: width 0.1s ease;
+                    container-type: inline-size;
+                    container-name: editor-sidebar;
+                    min-width: 0;
+                }
+                .editor-left-panel.collapsed { overflow: visible; }
+
+                .panel-toggle-tab {
+                    position: absolute;
+                    right: -13px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    width: 26px;
+                    height: 56px;
+                    background: var(--bg-surface);
+                    border: 1px solid rgba(var(--primary-rgb), 0.16);
+                    border-radius: 10px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    z-index: 200;
+                    color: var(--text-secondary);
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+                }
+                .panel-toggle-tab:hover { color: var(--primary-color); background: var(--bg-main); }
+
+                .resize-handle {
+                    width: 6px;
+                    cursor: col-resize;
+                    background: transparent;
+                    transition: background 0.2s;
+                    z-index: 150;
+                }
+                .resize-handle:hover, .resize-handle:active {
+                    background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.1), rgba(var(--primary-rgb), 0.5));
+                }
+
+                .editor-tabs {
+                    padding: 12px;
+                    border-bottom: 1px solid rgba(var(--primary-rgb), 0.12);
+                    display: flex;
+                    gap: 8px;
+                    background: rgba(var(--primary-rgb), 0.03);
+                }
+                .editor-tabs.vertical {
+                    position: sticky;
+                    top: 0;
+                    z-index: 5;
+                }
+                .editor-tab-btn {
+                    width: 100%;
+                    display: grid;
+                    grid-template-columns: 20px minmax(0, 1fr);
+                    align-items: center;
+                    gap: 10px;
+                    padding: 12px 14px;
+                    border-radius: 14px;
+                    border: 1px solid transparent;
+                    background: transparent;
+                    cursor: pointer;
+                    color: var(--text-secondary);
+                    font-size: 0.88rem;
+                    font-weight: 700;
+                    text-align: left;
+                }
+                .editor-tab-btn span {
                     white-space: nowrap;
                     overflow: hidden;
                     text-overflow: ellipsis;
                 }
-                .status-badge { 
-                    font-size: 0.65rem; 
-                    padding: 2px 8px; 
-                    background: var(--primary-color); 
-                    color: white;
-                    border-radius: 4px; 
-                    font-weight: 800;
-                }
-
-                .phase-nav { display: flex; gap: 4px; }
-                .phase-btn {
-                    padding: 4px 12px;
-                    border: none;
-                    background: transparent;
-                    color: var(--text-secondary);
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    border-radius: 8px;
-                    transition: all 0.2s;
-                }
-                .phase-btn:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
-                .phase-btn.active { background: var(--bg-main); color: var(--primary-color); }
-
-                .header-actions { display: flex; align-items: center; gap: 8px; }
-                .btn-icon {
-                    background: transparent;
-                    border: 1px solid var(--border-color);
-                    color: var(--text-secondary);
-                    width: 32px;
-                    height: 32px;
+                .editor-tab-btn .icon-wrapper {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: all 0.2s;
                 }
-                .btn-icon:hover { background: rgba(0,0,0,0.05); color: var(--text-primary); }
-                .btn-icon.active { color: var(--primary-color); background: rgba(var(--primary-rgb), 0.1); border-color: var(--primary-color); }
+                .editor-tab-btn:hover {
+                    background: rgba(var(--primary-rgb), 0.07);
+                    border-color: rgba(var(--primary-rgb), 0.12);
+                    color: var(--text-primary);
+                }
+                .editor-tab-btn.active {
+                    background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.14), rgba(var(--primary-rgb), 0.08));
+                    color: var(--primary-color);
+                    border-color: rgba(var(--primary-rgb), 0.24);
+                    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+                }
 
-                .btn-test, .btn-save {
+                .tab-content {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 18px;
+                    scrollbar-gutter: stable;
+                }
+                .wizard-banner {
+                    display: grid;
+                    gap: 14px;
+                    background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.16), rgba(var(--primary-rgb), 0.05));
+                    border: 1px solid rgba(var(--primary-rgb), 0.18);
+                    border-radius: 20px;
+                    padding: 16px;
+                    margin-bottom: 18px;
+                    box-shadow: 0 16px 34px rgba(var(--primary-rgb), 0.08);
+                }
+                .wizard-banner-top,
+                .bulk-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 12px;
+                    align-items: flex-start;
+                }
+                .wizard-kicker {
+                    font-size: 0.72rem;
+                    font-weight: 800;
+                    letter-spacing: 0.06em;
+                    text-transform: uppercase;
+                    color: var(--primary-color);
+                    margin-bottom: 6px;
+                }
+                .wizard-banner h3,
+                .bulk-modal h3 {
+                    margin: 0 0 6px;
+                    font-size: 1rem;
+                }
+                .wizard-banner p,
+                .bulk-modal p {
+                    margin: 0;
+                    color: var(--text-secondary);
+                    line-height: 1.5;
+                    font-size: 0.84rem;
+                }
+                .wizard-close-btn,
+                .panel-collapse-btn {
+                    width: 36px;
+                    min-width: 36px;
+                    height: 36px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.16);
+                    background: var(--bg-surface);
+                    color: var(--text-secondary);
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .wizard-progress {
+                    display: grid;
+                    grid-template-columns: repeat(5, minmax(0, 1fr));
+                    gap: 8px;
+                }
+                .wizard-progress-dot {
+                    min-height: 34px;
+                    border-radius: 999px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.14);
+                    background: rgba(var(--bg-surface-rgb), 0.72);
+                    color: var(--text-secondary);
+                    font-weight: 800;
+                    cursor: pointer;
+                }
+                .wizard-progress-dot.active {
+                    background: var(--primary-color);
+                    color: white;
+                    border-color: var(--primary-color);
+                }
+                .wizard-progress-dot.done {
+                    color: var(--primary-color);
+                    border-color: rgba(var(--primary-rgb), 0.24);
+                }
+                .wizard-actions,
+                .bulk-modal-actions {
+                    display: flex;
+                    justify-content: space-between;
+                    gap: 10px;
+                }
+                .wizard-nav-btn {
+                    min-height: 42px;
+                    padding: 0 14px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.16);
+                    background: var(--bg-surface);
+                    color: var(--text-primary);
+                    cursor: pointer;
+                    font-weight: 700;
+                }
+                .wizard-nav-btn.primary {
+                    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+                    color: white;
+                    border-color: transparent;
+                }
+                .wizard-nav-btn:disabled {
+                    opacity: 0.45;
+                    cursor: not-allowed;
+                }
+
+                .basics-container,
+                .publish-container,
+                .level-accordions-container,
+                .screens-accordion {
+                    display: grid;
+                    gap: 16px;
+                }
+
+                .grid-2 {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr);
+                    gap: 16px;
+                }
+
+                .settings-group,
+                .settings-card,
+                .concept-card,
+                .level-accordion-item,
+                .accordion-item {
+                    min-width: 0;
+                }
+
+                .settings-group,
+                .settings-card {
+                    background: linear-gradient(180deg, rgba(var(--bg-surface-rgb), 0.8), rgba(var(--bg-surface-rgb), 0.64));
+                    border: 1px solid rgba(var(--primary-rgb), 0.1);
+                    border-radius: 18px;
+                    padding: 16px;
+                    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+                }
+                .settings-group {
+                    display: grid;
+                    gap: 10px;
+                    margin-bottom: 0;
+                }
+                .settings-group h3,
+                .settings-card h4,
+                .concept-card h4 {
+                    margin: 0;
+                    font-size: 0.98rem;
+                    font-weight: 800;
+                    color: var(--text-primary);
+                }
+                .settings-card h4,
+                .concept-card h4 {
+                    font-size: 0.9rem;
+                }
+                .settings-group label {
+                    font-size: 0.76rem;
+                    margin: 0;
+                    display: block;
+                    color: var(--text-secondary);
+                    font-weight: 700;
+                    letter-spacing: 0.01em;
+                }
+                .editor-ui-scope input,
+                .editor-ui-scope select,
+                .editor-ui-scope textarea {
+                    width: 100%;
+                    box-sizing: border-box;
+                    border: 1px solid rgba(var(--primary-rgb), 0.12);
+                    background: var(--bg-input);
+                    color: var(--text-primary);
+                    border-radius: 12px;
+                    font-size: 0.9rem;
+                    line-height: 1.45;
+                    padding: 11px 13px;
+                    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+                }
+                .editor-ui-scope input,
+                .editor-ui-scope select {
+                    min-height: 44px;
+                }
+                .editor-ui-scope textarea {
+                    min-height: 110px;
+                    resize: vertical;
+                }
+                .editor-ui-scope input:focus,
+                .editor-ui-scope select:focus,
+                .editor-ui-scope textarea:focus {
+                    outline: none;
+                    border-color: rgba(var(--primary-rgb), 0.45);
+                    box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.08);
+                }
+                .asset-picker-field {
+                    display: grid;
+                    gap: 8px;
+                    margin-bottom: 0 !important;
+                }
+
+                .btn-add-level,
+                .btn-add-concept,
+                .card-header button,
+                .concept-input-row button,
+                .level-item .actions button,
+                .accordion-header,
+                .preview-toolbar button {
+                    font-family: 'Inter', sans-serif;
+                }
+                .btn-add-level,
+                .btn-add-concept,
+                .card-header button {
+                    min-height: 40px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.16);
+                    background: rgba(var(--primary-rgb), 0.07);
+                    color: var(--primary-color);
+                    cursor: pointer;
+                    font-size: 0.8rem;
+                    font-weight: 700;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    padding: 0 14px;
+                }
+                .btn-add-concept {
+                    width: 100%;
+                    justify-content: center;
+                }
+
+                .levels-list {
+                    display: grid;
+                    gap: 10px;
+                }
+                .level-item {
+                    display: grid;
+                    grid-template-columns: 36px minmax(0, 1fr) auto;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px;
+                    border-radius: 16px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.1);
+                    background: rgba(var(--bg-surface-rgb), 0.7);
+                    cursor: pointer;
+                    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+                }
+                .level-item:hover {
+                    transform: translateY(-1px);
+                    border-color: rgba(var(--primary-rgb), 0.24);
+                    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+                }
+                .level-item.selected {
+                    border-color: rgba(var(--primary-rgb), 0.4);
+                    background: rgba(var(--primary-rgb), 0.08);
+                }
+                .level-item .idx {
+                    width: 36px;
+                    height: 36px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 12px;
+                    font-size: 0.82rem;
+                    font-weight: 800;
+                    background: rgba(var(--primary-rgb), 0.12);
+                    color: var(--primary-color);
+                }
+                .level-item .details {
+                    min-width: 0;
+                    display: grid;
+                    gap: 4px;
+                }
+                .level-item .details strong {
+                    font-size: 0.9rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                .level-item .details span {
+                    font-size: 0.76rem;
+                    color: var(--text-secondary);
+                }
+                .level-item .actions {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    padding: 4px 12px;
-                    border-radius: 8px;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
                 }
-                .btn-test { background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-primary); }
-                .btn-save { background: var(--primary-color); border: none; color: white; }
-                .btn-exit { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px; }
-
-                .editor-main-layout {
-                    flex: 1;
-                    display: flex;
-                    overflow: hidden;
-                }
-
-                /* Sidebar Styles */
-                .editor-left-panel {
-                    width: 260px;
-                    border-right: 1px solid var(--border-color);
+                .level-item .actions button,
+                .concept-input-row button {
+                    width: 40px;
+                    min-width: 40px;
+                    height: 40px;
+                    border-radius: 12px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.12);
                     background: var(--bg-surface);
+                    color: var(--text-secondary);
                     display: flex;
-                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                }
+                .level-item .actions button.delete,
+                .concept-input-row button {
+                    color: #ef4444;
                 }
 
-                .editor-tabs {
-                    margin: 8px 8px 4px 8px;
-                    padding: 2px;
+                .level-accordion-item {
+                    margin-bottom: 0;
+                    border-radius: 18px;
+                    border: 1px solid rgba(var(--primary-rgb), 0.1);
+                    overflow: hidden;
+                    background: rgba(var(--bg-surface-rgb), 0.74);
+                    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04);
+                }
+                .level-accordion-header,
+                .accordion-header {
+                    padding: 14px 16px;
                     display: flex;
-                    flex-direction: row;
-                    background: var(--bg-input);
-                    border-radius: 10px;
-                    gap: 4px;
-                    border: 1px solid var(--border-color);
-                    overflow-x: auto;
-                    scrollbar-width: none;
-                    -ms-overflow-style: none;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    cursor: pointer;
+                    background: rgba(var(--bg-surface-rgb), 0.94);
+                }
+                .level-accordion-header strong { font-size: 0.88rem; }
+                .level-accordion-header .header-left,
+                .accordion-header .header-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 0;
+                }
+                .level-accordion-header .header-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                }
+                .lvl-badge {
+                    width: 28px;
+                    height: 28px;
+                    font-size: 0.78rem;
+                    font-weight: 800;
+                    background: var(--primary-color);
+                    color: white;
+                    border-radius: 999px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    flex-shrink: 0;
+                }
+                .count-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    padding: 6px 10px;
+                    border-radius: 999px;
+                    background: rgba(16, 185, 129, 0.12);
+                    color: #0f766e;
+                    font-size: 0.72rem;
+                    font-weight: 800;
+                }
+                .count-tag.wrong {
+                    background: rgba(239, 68, 68, 0.1);
+                    color: #b91c1c;
+                }
+                .accordion-body,
+                .accordion-content {
+                    padding: 16px;
+                    background: rgba(var(--bg-surface-rgb), 0.52);
+                    border-top: 1px solid rgba(var(--primary-rgb), 0.08);
+                }
+                .accordion-item {
+                    border: 1px solid rgba(var(--primary-rgb), 0.08);
+                    border-radius: 16px;
+                    overflow: hidden;
+                    background: rgba(var(--bg-surface-rgb), 0.7);
+                }
+                .arrow {
+                    transition: transform 0.18s ease;
+                }
+                .arrow.up {
+                    transform: rotate(180deg);
+                }
+
+                .concept-card {
+                    background: rgba(var(--bg-surface-rgb), 0.9);
+                    border: 1px solid rgba(var(--primary-rgb), 0.1);
+                    border-radius: 18px;
+                    padding: 16px;
+                    display: grid;
+                    gap: 14px;
+                }
+                .concept-card.success {
+                    box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08);
+                }
+                .concept-card.danger {
+                    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.08);
+                }
+                .card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    gap: 10px;
+                    flex-wrap: wrap;
+                }
+                .concept-rows {
+                    display: grid;
+                    gap: 10px;
+                }
+                .concept-input-row {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) 40px;
+                    gap: 10px;
+                    align-items: center;
+                }
+
+                .slider-input {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr) auto;
+                    gap: 12px;
+                    align-items: center;
+                }
+                .slider-input input[type="range"] {
+                    min-height: 22px;
+                    padding: 0;
+                    background: transparent;
+                    box-shadow: none;
+                }
+                .val-preview {
+                    min-width: 62px;
+                    text-align: center;
+                    padding: 8px 10px;
+                    border-radius: 12px;
+                    background: rgba(var(--primary-rgb), 0.08);
+                    color: var(--primary-color);
+                    font-weight: 800;
+                    font-size: 0.8rem;
+                }
+
+                @container editor-sidebar (min-width: 620px) {
+                    .tab-content .grid-2 {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+
+                @media (max-width: 1180px) {
+                    .editor-header {
+                        align-items: flex-start;
+                    }
+                    .header-actions {
+                        width: 100%;
+                        justify-content: flex-start;
+                    }
+                }
+
+                .editor-center-panel { flex: 1; background: var(--bg-main); padding: 16px; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+                .preview-container { 
+                    width: 100%;
+                    max-width: 1024px;
+                    flex: 1; 
+                    display: flex; 
+                    flex-direction: column; 
+                    background: #000; 
+                    border-radius: 16px; 
+                    overflow: hidden; 
+                    box-shadow: 0 20px 50px rgba(0,0,0,0.3); 
+                    border: 4px solid #1a1a1a; 
+                    position: relative;
+                }
+                #game-container { 
+                    transform-origin: top center;
+                }
+
+                .screen-preview-container {
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background-size: cover;
+                    background-position: center;
                     position: relative;
                 }
 
-                .editor-tabs::-webkit-scrollbar {
-                    display: none;
-                }
-
-                .editor-tabs::after {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    right: 0;
-                    width: 30px;
-                    height: 100%;
-                    background: linear-gradient(to left, var(--bg-input), transparent);
-                    pointer-events: none;
-                    border-radius: 0 10px 10px 0;
-                    opacity: 0.8;
-                }
-                .editor-tabs.vertical {
-                    flex-direction: column;
-                    height: auto;
-                    padding: 4px;
-                    gap: 2px;
-                }
-                .editor-tabs.vertical .editor-tab-btn {
-                    padding: 8px 12px;
-                    justify-content: flex-start;
-                }
-                .editor-tabs.vertical .editor-tab-btn span {
-                    font-size: 0.8rem;
-                }
-                .editor-tab-btn {
-                    flex: 1;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 6px;
-                    padding: 6px 4px;
-                    border: none;
-                    background: transparent;
-                    color: var(--text-secondary);
-                    cursor: pointer;
-                    border-radius: 7px;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                    text-align: center;
-                    white-space: nowrap;
-                }
-
-                .editor-tab-btn.active {
-                    background: var(--bg-surface);
-                    color: var(--primary-color);
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-                    font-weight: 700;
-                }
-                
-                .editor-tab-btn:hover:not(.active) {
-                    background: rgba(0,0,0,0.04);
-                    color: var(--text-primary);
-                }
-
-                .editor-tab-btn .icon-wrapper {
-                    width: 24px;
-                    height: 24px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-
-                .editor-tab-btn span { font-size: 0.75rem; font-weight: 500; }
-
-                .tab-content { 
-                    flex: 1; 
-                    padding: 12px 16px; 
-                    overflow-y: auto; 
-                }
-
-                .tab-content h3 { margin-top: 4px; margin-bottom: 20px; font-size: 1rem; font-weight: 800; color: var(--text-primary); border-left: 4px solid var(--primary-color); padding-left: 12px; line-height: 1.2; }
-                .settings-group { margin-bottom: 16px; display: flex; flex-direction: column; }
-                .settings-group label { display: block; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
-                .settings-group input, .settings-group textarea, .settings-group select {
-                    width: 100%; padding: 8px 12px; border-radius: 8px;
-                    border: 1px solid var(--border-color); background: var(--bg-input); color: var(--text-primary);
-                    font-size: 0.85rem; transition: border-color 0.2s;
-                }
-                .settings-group input:focus, .settings-group select:focus { border-color: var(--primary-color); outline: none; }
-
-                .slider-input { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-                .slider-input input[type="range"] { flex: 1; accent-color: var(--primary-color); }
-                .slider-input input[type="number"] { width: 65px; text-align: center; padding: 6px; }
-
-                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-                .levels-manager .btn-add-level {
-                    width: 100%; padding: 12px; border-radius: 8px; border: 2px dashed var(--border-color);
-                    background: transparent; color: var(--text-secondary); cursor: pointer; margin-bottom: 16px;
-                }
-
-                .level-item {
-                    display: flex; align-items: center; padding: 8px; border-radius: 10px;
-                    background: var(--bg-main); border: 1px solid var(--border-color); margin-bottom: 4px;
-                    cursor: pointer; transition: all 0.2s;
-                }
-
-                .level-item.selected { border-color: var(--primary-color); background: rgba(var(--primary-rgb), 0.05); }
-                .level-item .idx { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: var(--bg-surface); border-radius: 50%; font-size: 0.65rem; margin-right: 8px; }
-                .level-item .details { flex: 1; }
-                .level-item .details strong { display: block; font-size: 0.85rem; }
-                .level-item .details span { font-size: 0.7rem; color: var(--text-secondary); }
-                .level-item .actions { display: flex; gap: 4px; opacity: 0; }
-                .level-item:hover .actions { opacity: 1; }
-                .level-item .actions button { border: none; background: transparent; padding: 4px; color: var(--text-secondary); cursor: pointer; }
-                .level-item .actions button.delete:hover { color: #ef4444; }
-
-                .concept-section { margin-bottom: 12px; }
-                .concept-section h4 { font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 8px; }
-                .concept-row { display: flex; gap: 4px; margin-bottom: 4px; }
-                .concept-row input { flex: 1; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-input); }
-                .concept-row button { border: none; background: transparent; color: var(--text-secondary); cursor: pointer; }
-
-                .screen-selector-tabs { display: none; }
-                
-                .screens-accordion { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-                .level-accordion-item { 
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-                .level-accordion-item.open { 
-                    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-                    margin-bottom: 20px !important;
-                }
-                .level-accordion-header { 
-                    transition: all 0.2s;
-                }
-                .level-accordion-header:hover { 
-                    background: rgba(var(--primary-rgb), 0.08) !important;
-                }
-
-                .accordion-item { border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; background: var(--bg-surface); transition: all 0.2s; }
-                .accordion-item.open { border-color: var(--primary-color); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-                .accordion-header { 
-                    padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; 
-                    cursor: pointer; background: var(--bg-surface); transition: background 0.2s;
-                }
-                .accordion-header:hover { background: rgba(0,0,0,0.02); }
-                .accordion-header .header-left { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.8rem; color: var(--text-primary); }
-                .accordion-header .arrow { transition: transform 0.3s; color: var(--text-secondary); }
-                .accordion-header .arrow.up { transform: rotate(180deg); color: var(--primary-color); }
-                .accordion-content { padding: 14px; border-top: 1px solid var(--border-color); background: var(--bg-main); }
-
-                .screen-preview-container {
-                    width: 100%; height: 100%; border-radius: 8px; position: relative; overflow: hidden;
-                    display: flex; align-items: center; justify-content: center;
-                }
                 .screen-mockup-overlay {
-                    width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; flex-direction: column;
-                    align-items: center; justify-content: center; text-align: center; color: white; padding: 40px;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.4);
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    text-align: center;
+                    padding: 40px;
                 }
-                .screen-content h1 { font-size: 2.5rem; margin-bottom: 16px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
-                .screen-content p { font-size: 1.1rem; margin-bottom: 32px; max-width: 500px; line-height: 1.6; text-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+
+                .screen-content h1 {
+                    font-size: 2.5rem;
+                    margin-bottom: 20px;
+                    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+                }
+
+                .screen-content p {
+                    font-size: 1.1rem;
+                    max-width: 600px;
+                    margin-bottom: 30px;
+                    line-height: 1.6;
+                }
+
                 .preview-game-btn {
-                    padding: 12px 32px; background: var(--primary-color); border: none; border-radius: 30px;
-                    color: white; font-weight: 700; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.4);
+                    padding: 12px 32px;
+                    font-size: 1.1rem;
+                    font-weight: 700;
+                    background: var(--primary-color);
+                    color: white;
+                    border: none;
+                    border-radius: 30px;
+                    cursor: pointer;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
                 }
+
+                .bg-preview {
+                    width: 100%;
+                    height: 100%;
+                    background-size: cover;
+                    background-position: center;
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .preview-ui {
+                    position: absolute;
+                    top: 20px;
+                    left: 20px;
+                    right: 20px;
+                    display: flex;
+                    justify-content: space-between;
+                    pointer-events: none;
+                }
+
+                .score, .timer {
+                    background: rgba(0,0,0,0.6);
+                    padding: 8px 16px;
+                    border-radius: 12px;
+                    color: white;
+                    font-weight: 700;
+                    backdrop-filter: blur(5px);
+                    border: 1px solid rgba(255,255,255,0.2);
+                }
+
+                .instruction {
+                    position: absolute;
+                    width: 100%;
+                    text-align: center;
+                    color: white;
+                    font-size: 1.2rem;
+                    font-weight: 600;
+                    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+                    pointer-events: none;
+                }
+
+                .falling-item {
+                    position: absolute;
+                    background: white;
+                    padding: 8px 16px;
+                    border-radius: 8px;
+                    font-size: 0.85rem;
+                    font-weight: 700;
+                    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                }
+
+                .player-preview {
+                    position: absolute;
+                    background-size: contain;
+                    background-position: center;
+                    background-repeat: no-repeat;
+                }
+
                 .disabled-badge {
-                    position: absolute; top: 20px; right: 20px; background: #ef4444; color: white;
-                    padding: 4px 12px; border-radius: 4px; font-size: 0.7rem; font-weight: 800;
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    background: #ef4444;
+                    color: white;
+                    padding: 4px 12px;
+                    border-radius: 20px;
+                    font-size: 0.7rem;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                }
+                .preview-toolbar { position: relative; z-index: 10; height: 36px; padding: 0 12px; font-size: 0.75rem; background: #1a1a1a; color: rgba(255,255,255,0.6); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
+                .phaser-preview-placeholder {
+                    flex: 1;
+                    width: 100%;
+                    position: relative;
+                    display: flex;
+                    flex-direction: column;
+                }
+                .preview-toolbar button {
+                    min-height: unset !important;
+                    height: 28px !important;
+                    padding: 0 10px !important;
+                    border-radius: 6px !important;
+                    font-size: 0.75rem !important;
+                    z-index: 11 !important;
+                    pointer-events: auto !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 4px !important;
+                    background: transparent !important;
+                    border: none !important;
+                    color: var(--primary-color) !important;
+                    cursor: pointer !important;
+                    font-weight: bold !important;
+                    transition: all 0.2s ease !important;
+                }
+                .preview-toolbar button:hover {
+                    background: rgba(var(--primary-rgb), 0.1) !important;
+                    color: var(--primary-hover) !important;
                 }
 
-                .editor-center-panel { flex: 1; background: var(--bg-main); padding: 20px; overflow: hidden; display: flex; flex-direction: column; }
-                .preview-container { flex: 1; background: var(--bg-surface); border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-                .preview-toolbar { padding: 12px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: bold; }
-                .preview-toolbar button { padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer; display: flex; align-items: center; gap: 6px; }
+                .editor-right-panel {
+                    width: 260px;
+                    border-left: 1px solid rgba(var(--primary-rgb), 0.12);
+                    padding: 12px;
+                    font-size: 0.8rem;
+                    background: linear-gradient(180deg, rgba(var(--bg-surface-rgb), 0.98), rgba(var(--bg-surface-rgb), 0.92));
+                    overflow-y: auto;
+                    transition: width 0.2s ease, padding 0.2s ease;
+                }
+                .editor-right-panel.collapsed {
+                    width: 76px;
+                    padding: 12px 8px;
+                }
+                .panel-header {
+                    font-size: 0.75rem;
+                    margin-bottom: 12px;
+                    font-weight: 800;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 8px;
+                }
+                .panel-header-title { display: flex; align-items: center; gap: 8px; }
+                .summary-list { display: flex; flex-direction: column; gap: 8px; }
+                .summary-item { padding: 8px; font-size: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
+                .summary-item.success { background: #ecfdf5; color: #065f46; }
+                .summary-item.warning { background: #fffbeb; color: #92400e; }
+                .summary-item.info { background: #eff6ff; color: #1e40af; }
+                .summary-collapsed-stack {
+                    display: grid;
+                    gap: 10px;
+                    justify-items: center;
+                    margin-top: 16px;
+                }
+                .summary-mini-pill {
+                    width: 44px;
+                    min-height: 44px;
+                    border-radius: 14px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: rgba(var(--primary-rgb), 0.1);
+                    color: var(--primary-color);
+                    font-weight: 800;
+                    font-size: 0.78rem;
+                    text-align: center;
+                    padding: 4px;
+                }
 
-                .phaser-preview-placeholder { flex: 1; position: relative; overflow: hidden; padding: 20px; }
-                .bg-preview { width: 100%; height: 100%; border-radius: 8px; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-                
-                .preview-ui { position: absolute; top: 0; left: 0; width: 100%; padding: 15px; display: flex; justify-content: space-between; color: white; font-weight: bold; }
-                .instruction { position: absolute; top: 60px; background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 20px; color: white; font-size: 0.9rem; }
-                
-                .targets-preview { position: absolute; bottom: 40px; display: flex; gap: 20px; }
-                .target-box { width: 120px; height: 70px; border: 2px dashed rgba(255,255,255,0.5); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7rem; font-weight: bold; text-align: center; }
-                
-                .falling-item { padding: 8px 16px; background: white; border-radius: 20px; color: #333; font-weight: bold; font-size: 0.8rem; position: absolute; top: 120px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-                .player-preview { width: 100px; height: 20px; background: white; border-radius: 10px; position: absolute; bottom: 10px; }
+                .quick-actions h4 { font-size: 0.7rem; margin: 16px 0 8px; color: var(--text-secondary); text-transform: uppercase; }
+                .btn-template { padding: 6px 10px; font-size: 0.75rem; margin-bottom: 6px; width: 100%; text-align: left; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer; transition: all 0.2s; }
+                .btn-template:hover { border-color: var(--primary-color); background: var(--bg-surface); }
 
-                .editor-right-panel { width: 200px; border-left: 1px solid var(--border-color); background: var(--bg-surface); padding: 12px; }
-                .panel-header { font-weight: bold; font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-                .summary-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-                .summary-item { font-size: 0.8rem; display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; }
-                .summary-item.success { color: #10b981; background: rgba(16, 185, 129, 0.1); }
-                .summary-item.warning { color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
-                .summary-item.info { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
-
-                .quick-actions h4 { font-size: 0.8rem; margin-bottom: 12px; }
-                .btn-template { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-main); text-align: left; font-size: 0.8rem; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
-                .btn-template:hover { background: var(--bg-surface); border-color: var(--primary-color); }
-
-                .test-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-                .modal-content { position: relative; width: 1024px; height: 768px; }
+                .test-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+                .modal-content { position: relative; width: 90vw; height: 85vh; border-radius: 20px; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
                 .btn-close { position: absolute; top: -50px; right: 0; background: transparent; border: none; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem; }
+                .bulk-modal-backdrop {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(2, 6, 23, 0.62);
+                    backdrop-filter: blur(10px);
+                    z-index: 2100;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 24px;
+                }
+                .bulk-modal {
+                    width: min(640px, 100%);
+                    background: var(--bg-surface);
+                    border: 1px solid rgba(var(--primary-rgb), 0.18);
+                    border-radius: 24px;
+                    box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
+                    padding: 20px;
+                    display: grid;
+                    gap: 16px;
+                }
+                .bulk-textarea {
+                    min-height: 220px !important;
+                }
+                @media (max-width: 980px) {
+                    .editor-right-panel:not(.collapsed) {
+                        width: 220px;
+                    }
+                }
             `}</style>
         </MainLayout>
     );

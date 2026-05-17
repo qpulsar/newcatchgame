@@ -30,6 +30,7 @@ export const Login: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         localStorage.setItem('token', data.access_token);
+        localStorage.setItem('user', JSON.stringify(data.user));
         navigate('/');
       } else {
         setError(t('auth.error'));

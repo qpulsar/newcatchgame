@@ -4,6 +4,15 @@ import { initReactI18next } from 'react-i18next';
 import trTranslation from './locales/tr.json';
 import enTranslation from './locales/en.json';
 
+const getInitialLanguage = () => {
+  if (typeof window === 'undefined') {
+    return 'tr';
+  }
+
+  const savedLanguage = window.localStorage.getItem('language');
+  return savedLanguage || 'tr';
+};
+
 i18n
   .use(initReactI18next)
   .init({
@@ -11,7 +20,7 @@ i18n
       en: { translation: enTranslation },
       tr: { translation: trTranslation }
     },
-    lng: 'tr', // Varsayılan dil
+    lng: getInitialLanguage(),
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false // React zaten XSS'i önler

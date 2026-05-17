@@ -10,6 +10,7 @@ interface Asset {
     url: string;
     thumbnail_url?: string;
     creator_id: number;
+    creator_role?: string;
     created_at: string;
 }
 
@@ -19,6 +20,48 @@ export const AssetLibrary: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const userStr = localStorage.getItem('user');
+  const [user, setUser] = useState<any>((userStr && userStr !== 'undefined') ? JSON.parse(userStr) : {});
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.id) {
+          setUser(data);
+          localStorage.setItem('user', JSON.stringify(data));
+        }
+      })
+      .catch(err => console.error('Failed to sync user:', err));
+    }
+  }, []);
+
+  const canDeleteAsset = (asset: Asset) => {
+    if (!user || !user.role) return false;
+    
+    // Admin her şeyi silebilir
+    if (user.role === 'admin') return true;
+    
+    // Adminin eklediği asset'leri öğretmen ve öğrenci silememeli.
+    if (asset.creator_role === 'admin') return false;
+    
+    // Öğrenci öğretmeninin eklediği assetleri silememeli ve sadece kendi eklediklerini silebilmeli.
+    if (user.role === 'student') {
+      return asset.creator_id === user.id;
+    }
+    
+    // Öğretmen sadece kendi eklediklerini silebilmeli.
+    if (user.role === 'teacher') {
+      return asset.creator_id === user.id;
+    }
+    
+    return false;
+  };
   
   // Modal states
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
@@ -241,13 +284,15 @@ export const AssetLibrary: React.FC = () => {
                                     )}
                                 </div>
                             )}
-                            <button 
-                                onClick={() => handleDeleteAsset(asset.id)}
-                                style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '6px', padding: '6px', cursor: 'pointer' }}
-                                title="Sil"
-                            >
-                                <Trash2 size={16} />
-                            </button>
+                            {canDeleteAsset(asset) && (
+                                <button 
+                                    onClick={() => handleDeleteAsset(asset.id)}
+                                    style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(239, 68, 68, 0.9)', color: 'white', border: 'none', borderRadius: '6px', padding: '6px', cursor: 'pointer' }}
+                                    title="Sil"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
                         </div>
                         <div style={{ padding: '16px' }}>
                             <div style={{ fontWeight: '600', fontSize: '1rem', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{asset.name}</div>
