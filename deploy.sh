@@ -5,6 +5,10 @@
 
 set -e
 
+COMPOSE_CMD="docker compose"
+API_HEALTHCHECK_RETRIES=30
+API_HEALTHCHECK_INTERVAL=2
+
 echo "Starting Docker deployment process..."
 
 # Ensure we are in the project root
@@ -20,22 +24,50 @@ if [ ! -f ".env" ]; then
     echo "IMPORTANT: Please edit the .env file with your production settings."
 fi
 
-# Build and start the containers
-echo "Stopping existing containers..."
-docker-compose down
+wait_for_api() {
+    echo "Waiting for API container to become ready..."
 
-echo "Building and starting containers in detached mode..."
-docker-compose up --build -d
+    for attempt in $(seq 1 "$API_HEALTHCHECK_RETRIES"); do
+        if $COMPOSE_CMD exec -T api python -c "
+from main import app
+print('api-ready')
+" >/dev/null 2>&1; then
+            echo "API container is ready."
+            return 0
+        fi
 
-echo "Waiting for API container to become ready..."
-sleep 5
+        echo "API not ready yet (${attempt}/${API_HEALTHCHECK_RETRIES}). Retrying in ${API_HEALTHCHECK_INTERVAL}s..."
+        sleep "$API_HEALTHCHECK_INTERVAL"
+    done
 
-echo "Running safe database migration..."
-docker-compose exec -T api python -c "
+    echo "ERROR: API container did not become ready in time."
+    $COMPOSE_CMD logs --tail=100 api || true
+    exit 1
+}
+
+run_safe_migration() {
+    echo "Running safe database migration..."
+
+    if ! $COMPOSE_CMD exec -T api python -c "
 from main import ensure_legacy_schema_columns
 ensure_legacy_schema_columns()
 print('Safe migration completed.')
-"
+"; then
+        echo "ERROR: Safe migration failed. Recent API logs:"
+        $COMPOSE_CMD logs --tail=100 api || true
+        exit 1
+    fi
+}
+
+# Build and start the containers
+echo "Stopping existing containers..."
+$COMPOSE_CMD down
+
+echo "Building and starting containers in detached mode..."
+$COMPOSE_CMD up --build -d
+
+wait_for_api
+run_safe_migration
 
 echo "---------------------------------------------------"
 echo "Deployment successful!"
