@@ -27,6 +27,16 @@ docker-compose down
 echo "Building and starting containers in detached mode..."
 docker-compose up --build -d
 
+echo "Waiting for API container to become ready..."
+sleep 5
+
+echo "Running safe database migration..."
+docker-compose exec -T api python -c "
+from main import ensure_legacy_schema_columns
+ensure_legacy_schema_columns()
+print('Safe migration completed.')
+"
+
 echo "---------------------------------------------------"
 echo "Deployment successful!"
 echo "Backend is running on: http://localhost:8000"
