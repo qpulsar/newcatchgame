@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import List, Optional
@@ -21,6 +22,38 @@ logger = logging.getLogger(__name__)
 
 # Veritabanı tablolarını oluştur
 models.Base.metadata.create_all(bind=database.engine)
+
+def ensure_legacy_schema_columns():
+    engine = database.engine
+    inspector = inspect(engine)
+
+    if "levels" not in inspector.get_table_names():
+        return
+
+    existing_columns = {column["name"] for column in inspector.get_columns("levels")}
+    missing_level_columns = {
+        "course": "VARCHAR",
+        "grade_level": "VARCHAR",
+        "topic": "VARCHAR",
+        "language": "VARCHAR DEFAULT 'tr'",
+        "visibility": "VARCHAR DEFAULT 'public'",
+        "status": "VARCHAR DEFAULT 'draft'",
+        "reviewed_by": "INTEGER",
+        "reviewed_at": "TIMESTAMP",
+        "moderation_note": "VARCHAR",
+        "removed_reason": "VARCHAR",
+    }
+
+    with engine.begin() as connection:
+        for column_name, column_definition in missing_level_columns.items():
+            if column_name in existing_columns:
+                continue
+            connection.execute(
+                text(f"ALTER TABLE levels ADD COLUMN {column_name} {column_definition}")
+            )
+            logger.info("Added missing legacy column '%s' to levels table.", column_name)
+
+ensure_legacy_schema_columns()
 
 # Dosya yükleme dizini oluştur
 UPLOAD_DIR = "uploads"
