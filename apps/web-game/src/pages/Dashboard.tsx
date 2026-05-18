@@ -18,10 +18,11 @@ export const Dashboard: React.FC = () => {
         const token = localStorage.getItem('token');
         if (!token) return;
 
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const headers = { 'Authorization': `Bearer ${token}` };
+
         // Rozetleri getir
-        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/users/me/badges`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
+        fetch(`${apiUrl}/users/me/badges`, { headers })
         .then(res => {
             if (res.status === 401) {
                 localStorage.removeItem('token');
@@ -38,18 +39,35 @@ export const Dashboard: React.FC = () => {
         })
         .catch(err => console.error('Error fetching badges:', err));
 
-        // Burada gerçekte istatistikleri ve son denemeleri getiren bir endpoint olmalı
-        // Şimdilik mock data
-        setRecentAttempts([
-            { id: 1, level_title: 'Temel Fizik', score: 450, date: '2026-05-13' },
-            { id: 2, level_title: 'Hız ve İvme', score: 120, date: '2026-05-12' }
-        ]);
-        
-        setStats({
-            totalScore: 570,
-            gamesPlayed: 2,
-            levelsCreated: 1
-        });
+        // İstatistikleri getir
+        fetch(`${apiUrl}/users/me/stats`, { headers })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to fetch stats');
+            return res.json();
+        })
+        .then(data => {
+            if (data) {
+                setStats({
+                    totalScore: data.totalScore ?? 0,
+                    gamesPlayed: data.gamesPlayed ?? 0,
+                    levelsCreated: data.levelsCreated ?? 0
+                });
+            }
+        })
+        .catch(err => console.error('Error fetching stats:', err));
+
+        // Son denemeleri getir
+        fetch(`${apiUrl}/users/me/attempts`, { headers })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to fetch attempts');
+            return res.json();
+        })
+        .then(data => {
+            if (Array.isArray(data)) {
+                setRecentAttempts(data);
+            }
+        })
+        .catch(err => console.error('Error fetching attempts:', err));
     }, []);
 
     return (

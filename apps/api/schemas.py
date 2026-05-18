@@ -178,3 +178,14 @@ class Asset(AssetBase):
 
     class Config:
         from_attributes = True
+
+class UserStats(BaseModel):
+    totalScore: int
+    gamesPlayed: int
+    levelsCreated: int
+
+class UserAttemptResponse(BaseModel):
+    id: int
+    level_title: str
+    score: int
+    date: str

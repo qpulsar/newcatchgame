@@ -17,7 +17,7 @@ type EditorPhase = 'basics' | 'content' | 'rules' | 'design' | 'publish';
 function createGlobalScreens() {
     return {
         cover: { title: 'Hazır mısın?', description: 'Tüm doğru nesneleri yakalayarak puan kazan!', buttonText: 'Oyunu Başlat' },
-        victory: { title: 'Harika!', description: 'Tüm seviyeleri başarıyla tamamladın.', buttonText: 'Kütüphaneye Dön' },
+        victory: { title: 'Harika!', description: 'Tüm seviyeleri başarıyla tamamladın.', buttonText: 'Nasıldım?' },
         defeat: { title: 'Olamaz!', description: 'Skorun yetersiz kaldı. Tekrar denemek ister misin?', buttonText: 'Tekrar Dene' }
     };
 }

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, F
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, func
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
 from typing import List, Optional
@@ -312,6 +312,46 @@ def update_current_user(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+@app.get("/users/me/stats", response_model=schemas.UserStats)
+def get_my_stats(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    total_score = db.query(func.sum(models.GameAttempt.score))\
+        .filter(models.GameAttempt.user_id == current_user.id).scalar() or 0
+    games_played = db.query(models.GameAttempt)\
+        .filter(models.GameAttempt.user_id == current_user.id).count()
+    levels_created = db.query(models.Level)\
+        .filter(models.Level.creator_id == current_user.id).count()
+    
+    return {
+        "totalScore": total_score,
+        "gamesPlayed": games_played,
+        "levelsCreated": levels_created
+    }
+
+@app.get("/users/me/attempts", response_model=List[schemas.UserAttemptResponse])
+def get_my_attempts(
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    results = db.query(models.GameAttempt, models.Level.title)\
+        .join(models.Level, models.GameAttempt.level_id == models.Level.id)\
+        .filter(models.GameAttempt.user_id == current_user.id)\
+        .order_by(models.GameAttempt.completed_at.desc())\
+        .limit(10)\
+        .all()
+    
+    return [
+        {
+            "id": attempt.id,
+            "level_title": title,
+            "score": attempt.score,
+            "date": attempt.completed_at.strftime("%Y-%m-%d")
+        }
+        for attempt, title in results
+    ]
 
 def log_activity(
     db: Session,
